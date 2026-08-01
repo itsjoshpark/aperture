@@ -30,13 +30,15 @@ export function useRenameSession(gallery: Gallery) {
   const undoRecords = shallowRef<RenameRecord[] | null>(null);
   const failure = ref<string | null>(null);
 
-  const plan = computed(() => buildRenamePlan(draft.value, options.value, allNamesInFolder.value));
-
   /**
-   * Every name in the folder, images or not. Kept as a ref rather than read
-   * on demand so the preview can flag a collision as you type.
+   * Every name in the folder, images or not. Held rather than read on demand so
+   * the preview can flag a collision as you type — and it must include
+   * non-images, since a target colliding with a spreadsheet is just as
+   * destructive as one colliding with a photo.
    */
   const allNamesInFolder = shallowRef<string[]>([]);
+
+  const plan = computed(() => buildRenamePlan(draft.value, options.value, allNamesInFolder.value));
 
   const reordered = computed(() =>
     draft.value.some((entry, index) => entry.name !== initialNames.value[index]),
@@ -76,6 +78,22 @@ export function useRenameSession(gallery: Gallery) {
 
   function setOrder(next: ImageEntry[]): void {
     draft.value = next;
+  }
+
+  /**
+   * Drop a file that was deleted while a session was open.
+   *
+   * The snapshot has to shrink too. Comparing the draft against a snapshot that
+   * still holds the deleted name shifts every entry after it by one, so the
+   * session would look rearranged — and prompt to discard changes — when all
+   * that happened was a delete.
+   */
+  function forget(name: string): void {
+    const at = draft.value.findIndex((entry) => entry.name === name);
+    if (at === -1) return;
+
+    draft.value = draft.value.filter((entry) => entry.name !== name);
+    initialNames.value = initialNames.value.filter((_, index) => index !== at);
   }
 
   /** Leaves rename mode and discards the arrangement. */
@@ -156,6 +174,7 @@ export function useRenameSession(gallery: Gallery) {
     begin,
     move,
     setOrder,
+    forget,
     cancel,
     finish,
     apply,

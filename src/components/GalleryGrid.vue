@@ -101,7 +101,7 @@ function getTileRect(name: string): DOMRect | null {
 watch(
   () => gallery.selectedName.value,
   async (name) => {
-    if (!name || drag.isDragging()) return;
+    if (!name || drag.dragging.value) return;
     await nextTick();
     tiles.get(name)?.scrollIntoView({ block: "nearest" });
   },
@@ -130,7 +130,7 @@ defineExpose({ scroller, getTileRect });
         :selected="entry.name === gallery.selectedName.value"
         :preview-name="previewNames?.get(entry.name)"
         :removing="entry.name === gallery.removingName.value"
-        :dragging="index === drag.draggingIndex.value && drag.isDragging()"
+        :dragging="index === drag.draggingIndex.value && drag.dragging.value"
         :translate="drag.translate.value"
         :draggable="rename.active.value"
         @select="gallery.select(entry.name)"

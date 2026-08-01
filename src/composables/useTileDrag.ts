@@ -41,13 +41,17 @@ export function useTileDrag(options: TileDragOptions) {
   /** Index being dragged, or -1. Drives the tile's lifted styling. */
   const draggingIndex = ref(-1);
   const translate = ref({ x: 0, y: 0 });
+  /**
+   * True only once the press has crossed the threshold and become a drag. A ref
+   * rather than a plain flag because the template styles the lifted tile off it.
+   */
+  const dragging = ref(false);
 
   const element = shallowRef<HTMLElement | null>(null);
   let pointerId = -1;
   let origin = { x: 0, y: 0 };
   let grabOffset = { x: 0, y: 0 };
   let pointer = { x: 0, y: 0 };
-  let started = false;
   let frame = 0;
 
   function onPointerDown(event: PointerEvent, index: number): void {
@@ -59,7 +63,7 @@ export function useTileDrag(options: TileDragOptions) {
     pointerId = event.pointerId;
     origin = { x: event.clientX, y: event.clientY };
     pointer = { ...origin };
-    started = false;
+    dragging.value = false;
     draggingIndex.value = index;
 
     const rect = tile.getBoundingClientRect();
@@ -75,11 +79,11 @@ export function useTileDrag(options: TileDragOptions) {
     if (event.pointerId !== pointerId) return;
     pointer = { x: event.clientX, y: event.clientY };
 
-    if (!started) {
+    if (!dragging.value) {
       const travelled = Math.hypot(pointer.x - origin.x, pointer.y - origin.y);
       if (travelled < DRAG_THRESHOLD) return;
 
-      started = true;
+      dragging.value = true;
       // Capture so the drag survives the pointer leaving the tile — which it
       // does immediately, because the tile moves out from under it.
       element.value?.setPointerCapture(pointerId);
@@ -96,7 +100,7 @@ export function useTileDrag(options: TileDragOptions) {
     if (frame !== 0) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      if (started) update();
+      if (dragging.value) update();
     });
   }
 
@@ -154,7 +158,7 @@ export function useTileDrag(options: TileDragOptions) {
   }
 
   function onKeyDown(event: KeyboardEvent): void {
-    if (event.key !== "Escape" || !started) return;
+    if (event.key !== "Escape" || !dragging.value) return;
     event.preventDefault();
     event.stopPropagation();
     options.onCancel?.();
@@ -163,7 +167,7 @@ export function useTileDrag(options: TileDragOptions) {
 
   function onPointerUp(event: PointerEvent): void {
     if (event.pointerId !== pointerId) return;
-    if (started) options.onEnd?.();
+    if (dragging.value) options.onEnd?.();
     stop();
   }
 
@@ -181,7 +185,7 @@ export function useTileDrag(options: TileDragOptions) {
     window.removeEventListener("pointercancel", onPointerUp);
     window.removeEventListener("keydown", onKeyDown, true);
 
-    started = false;
+    dragging.value = false;
     pointerId = -1;
     element.value = null;
     draggingIndex.value = -1;
@@ -193,8 +197,8 @@ export function useTileDrag(options: TileDragOptions) {
   return {
     draggingIndex,
     translate,
-    /** True once the press has actually become a drag. */
-    isDragging: () => started,
+    /** True once the press has actually become a drag, not merely a click. */
+    dragging,
     onPointerDown,
     cancel: () => {
       options.onCancel?.();

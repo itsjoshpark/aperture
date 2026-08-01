@@ -28,18 +28,38 @@ Package manager is **pnpm** (pinned via `packageManager`). The toolchain is **Vi
 
 ```
 src/
+  main.ts          production entry: real disk
+  mount.ts         builds the app around an Aperture instance
   lib/
     fs/            the ONLY code that touches disk (see below)
-    naming.ts      PURE: filename planning + validation
+      types.ts         FileSystemPort — the seam everything else is written against
+      fsa-adapter.ts   File System Access implementation
+      memory-adapter.ts   in-memory fake (tests + harness only)
+      folder-source.ts    where folders come from; swapped by the harness
+      handle-store.ts     IndexedDB, remembers the last folder
+    naming.ts          PURE: filename planning + validation
     rename-engine.ts   executes a plan against a FileSystemPort
-    sort.ts        natural-name + date comparators
+    sort.ts            natural-name + date comparators
     grid-geometry.ts   PURE: width/gap -> columns, index<->cell, pointer hit-test
-    thumbnails.ts  object-URL LRU cache
-  composables/     useGallery, useRenameSession, useTileDrag, useKeyboard, ...
+    thumbnails.ts      object-URL LRU cache
+    file-names.ts      PURE: split base/extension, recognise images
+  composables/
+    useAperture.ts     the store; provided at app level, injected everywhere
+    useGallery.ts      entries, sort, selection, delete
+    useRenameSession.ts   draft order, affixes, apply/undo
+    useTileDrag.ts     Pointer Events drag-reorder, no library
+    useKeyboard.ts     the whole key map
+    useUnsavedGuard.ts    beforeunload + the in-app discard dialog
   components/
-    ui/            shadcn-vue generated primitives — regenerate, don't hand-edit
+    ui/            shadcn-vue primitives — see the note under Testing
 e2e/               Playwright specs + a test-only harness entry
 ```
+
+State lives in one place. `createAperture()` composes the gallery, the rename
+session and the guard; `mount.ts` provides it at the app level and every
+component reaches it with `useAperture()`. `App.vue` takes no props and is
+identical in production and under test — the entry point decides where folders
+come from by passing a different `FolderSource`.
 
 ## Things that will bite you
 
@@ -61,11 +81,23 @@ goes to a `.aperture-tmp-*` name first, then to its target. Do not "optimise" th
 **Permissions do not survive closing every tab of the origin.** Re-grant with `queryPermission()` /
 `requestPermission()` inside a user gesture.
 
-**`memory-adapter.ts` must never be imported from `src/main.ts`.** It is the in-memory fake for
-tests and the e2e harness; keeping it out of the entry graph is what keeps it out of the bundle.
+**`memory-adapter.ts` must never be reachable from `src/main.ts`.** It is the in-memory fake for
+tests and the e2e harness, which has its own HTML entry; keeping it out of the production entry
+graph is what keeps it out of the bundle. `grep MemoryAdapter dist/assets/*.js` should find nothing.
 
 **Assets must go through Vite.** `base` is `/aperture/`, so a hardcoded leading-slash URL will 404
 in production.
+
+**Dialogs close themselves before your click handler runs.** Reka's `AlertDialogAction` dismisses
+the dialog as part of handling the click, so any state you clear in the "dialog closed" path is gone
+by the time the confirm handler looks for it — the confirm silently does nothing. Both dialogs
+therefore track _whether they are open_ separately from _what they are about_
+(`deleteDialogOpen` / `pendingDelete`, `guard.open` / `guard.pending`). Do not merge them back.
+
+**`columnCount()` reimplements a browser decision** — how many tracks `auto-fill` produces — and
+arrow keys and drag hit-testing both trust it. `grid-geometry.browser.test.ts` checks it against
+real layout across a matrix of widths and tile sizes. If you change the grid CSS, that test is what
+tells you whether the maths still holds.
 
 ## Testing
 
@@ -81,6 +113,14 @@ would assert nothing. Two Vitest projects instead:
 
 Put a new test in `unit` unless it genuinely needs layout. If you find yourself mocking
 `getBoundingClientRect`, it belongs in `browser`.
+
+On top of those, `pnpm e2e` drives the whole app in Chromium through `e2e/harness.html`.
+
+**On `components/ui/`:** these are shadcn-vue's output, and shadcn's model is that you own them —
+customising is expected, not a smell. `Slider.vue` has one Aperture change: a `label` prop, because
+`role="slider"` sits on the thumb and a plain `aria-label` on the component would land on the root
+and leave the control unnamed. Mark any further edits the same way, so a future regeneration does
+not quietly drop them.
 
 ## Deployment
 

@@ -133,9 +133,7 @@ export function createAperture(options: ApertureOptions = {}) {
       gallery.removingName.value = entry.name;
       await wait(motion.duration(REMOVE_DURATION));
       await gallery.remove(entry.name, displayed.value);
-      if (rename.active.value) {
-        rename.setOrder(rename.draft.value.filter((item) => item.name !== entry.name));
-      }
+      if (rename.active.value) rename.forget(entry.name);
     } catch (cause) {
       gallery.error.value =
         cause instanceof Error ? cause.message : `Could not delete ${entry.name}.`;
