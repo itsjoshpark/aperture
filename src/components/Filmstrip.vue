@@ -28,7 +28,7 @@ watch(
 
 <template>
   <div
-    class="flex shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-black/40 p-2"
+    class="flex shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-[#2d2d2d]/40 p-2"
     role="listbox"
     aria-label="Images in this folder"
   >
