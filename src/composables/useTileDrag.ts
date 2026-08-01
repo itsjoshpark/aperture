@@ -23,6 +23,15 @@ const MAX_SCROLL_SPEED = 18;
 export interface TileDragOptions {
   /** The scrolling element the grid lives in. */
   scroller: () => HTMLElement | null;
+  /**
+   * The grid's laid-out height. Auto-scroll cannot trust `scrollHeight`: the
+   * lifted card is transformed, and a transformed box still counts towards the
+   * scroller's scrollable overflow. Dragging to the bottom edge would then
+   * scroll, which moves the card further down the document, which makes more
+   * room to scroll — a loop that runs off the end of the last row into blank
+   * space. Layout height is the one number the transform cannot inflate.
+   */
+  contentHeight: () => number;
   /** Number of tiles currently rendered. */
   count: () => number;
   metrics: () => GridMetrics;
@@ -38,8 +47,14 @@ export interface TileDragOptions {
 }
 
 export function useTileDrag(options: TileDragOptions) {
-  /** Index being dragged, or -1. Drives the tile's lifted styling. */
+  /**
+   * Index being dragged, or -1. Doubles as the drop index: the tile is moved
+   * through the list as the pointer crosses cells, so the cell it currently
+   * sits in is the one it would land in, and that cell is what the tile draws
+   * as its placeholder.
+   */
   const draggingIndex = ref(-1);
+  /** Offset of the lifted card from its cell. Applied inside the tile, not to it. */
   const translate = ref({ x: 0, y: 0 });
   /**
    * True only once the press has crossed the threshold and become a drag. A ref
@@ -108,12 +123,14 @@ export function useTileDrag(options: TileDragOptions) {
     const tile = element.value;
     if (!tile) return;
 
-    // Read the tile's laid-out position by subtracting the transform we applied,
-    // so this self-corrects after a reorder moves the tile to a new cell.
+    // The tile stays in its cell as the drop placeholder and only the card
+    // inside it is offset, so this rect is the laid-out position as read — and
+    // it is already the new one after a reorder has moved the tile a cell on.
     const rect = tile.getBoundingClientRect();
-    const layout = { x: rect.left - translate.value.x, y: rect.top - translate.value.y };
-    const desired = { x: pointer.x - grabOffset.x, y: pointer.y - grabOffset.y };
-    translate.value = { x: desired.x - layout.x, y: desired.y - layout.y };
+    translate.value = {
+      x: pointer.x - grabOffset.x - rect.left,
+      y: pointer.y - grabOffset.y - rect.top,
+    };
 
     autoScroll();
 
@@ -145,12 +162,16 @@ export function useTileDrag(options: TileDragOptions) {
     if (above < EDGE_SIZE) delta = -speedFor(EDGE_SIZE - above);
     else if (below < EDGE_SIZE) delta = speedFor(EDGE_SIZE - below);
 
-    if (delta !== 0) {
-      scroller.scrollTop += delta;
-      // Keep the loop alive while hovering the edge, even if the pointer is
-      // perfectly still — otherwise scrolling stalls the moment you stop moving.
-      schedule();
-    }
+    if (delta === 0) return;
+
+    const limit = Math.max(0, options.contentHeight() - scroller.clientHeight);
+    const next = Math.min(Math.max(scroller.scrollTop + delta, 0), limit);
+    if (next === scroller.scrollTop) return;
+
+    scroller.scrollTop = next;
+    // Keep the loop alive while hovering the edge, even if the pointer is
+    // perfectly still — otherwise scrolling stalls the moment you stop moving.
+    schedule();
   }
 
   function speedFor(depth: number): number {

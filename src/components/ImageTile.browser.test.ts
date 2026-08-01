@@ -1,5 +1,8 @@
 import { render } from "vitest-browser-vue";
 import { expect, test } from "vite-plus/test";
+// The tile's entire layout is Tailwind utilities, so the drag test below is
+// only measuring anything real with the app's stylesheet actually loaded.
+import "@/assets/index.css";
 import ImageTile from "./ImageTile.vue";
 import { fileOf, HEIC_64, PNG_64 } from "@/lib/fs/fixtures";
 import type { ImageEntry } from "@/lib/fs/types";
@@ -57,6 +60,54 @@ test("makes the image fully opaque once it has loaded", async () => {
   await expect.element(image).toBeVisible();
 
   await expect.poll(() => getComputedStyle(image.element()).opacity).toBe("1");
+});
+
+/**
+ * The drag is only legible if the tile is in two places at once: the card under
+ * the cursor, and an outline of the cell it would land in. Both come out of one
+ * element staying put while a child is offset, which is a claim about real
+ * layout — a computed `transform` string alone would not catch the day someone
+ * puts the transform back on the cell.
+ */
+test("leaves a placeholder in the cell and offsets the card", async () => {
+  const translate = { x: 60, y: 40 };
+  const props = {
+    entry: entryFor(),
+    cache: new ThumbnailCache(),
+    selected: false,
+    dragging: false,
+    translate: { x: 0, y: 0 },
+  };
+  const screen = render(ImageTile, { props });
+
+  const cell = screen.getByRole("gridcell").element();
+  const card = cell.firstElementChild as HTMLElement;
+  const atRest = cell.getBoundingClientRect();
+
+  await screen.rerender({ ...props, dragging: true, translate });
+
+  const placeholder = cell.querySelector("[data-drop-placeholder]");
+  expect(placeholder).not.toBeNull();
+
+  // The cell has not moved: the placeholder marks where the tile still belongs.
+  const cellNow = cell.getBoundingClientRect();
+  expect(cellNow.left).toBeCloseTo(atRest.left, 0);
+  expect(cellNow.top).toBeCloseTo(atRest.top, 0);
+  expect(placeholder!.getBoundingClientRect().width).toBeCloseTo(cellNow.width, 0);
+
+  // The card has.
+  const lifted = card.getBoundingClientRect();
+  expect(lifted.left - cellNow.left).toBeCloseTo(translate.x, 0);
+  expect(lifted.top - cellNow.top).toBeCloseTo(translate.y, 0);
+});
+
+test("has no placeholder when it is not being dragged", async () => {
+  const screen = mount();
+  await expect.element(screen.getByRole("img")).toBeVisible();
+
+  expect(
+    screen.getByRole("gridcell").element().querySelector("[data-drop-placeholder]"),
+  ).toBeNull();
 });
 
 test("shows the file name and a delete control", async () => {

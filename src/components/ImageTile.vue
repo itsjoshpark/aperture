@@ -128,6 +128,16 @@ defineExpose({
 </script>
 
 <template>
+  <!--
+    The grid cell. It never moves during a drag — only the card inside it does —
+    so it doubles as the drop placeholder, and `z-20` on it is what floats the
+    lifted card over the neighbouring tiles.
+
+    `transition: none` while dragging is load-bearing: a drag reorders the grid
+    under us, and without it the placeholder would FLIP-animate to its new cell
+    over `--motion-slow` while the card's offset — measured against this element
+    — drifted under the cursor for the whole of it.
+  -->
   <div
     ref="root"
     role="gridcell"
@@ -136,107 +146,134 @@ defineExpose({
     :tabindex="selected && !removing ? 0 : -1"
     :class="
       cn(
-        'group relative flex flex-col rounded-sm bg-frame p-2 text-frame-foreground select-none',
-        'transition-[box-shadow,transform,opacity] duration-(--motion-fast) ease-(--motion-ease)',
+        'group relative flex flex-col rounded-sm select-none',
+        'transition-[transform,opacity] duration-(--motion-fast) ease-(--motion-ease)',
         'focus-visible:outline-none',
-        selected ? 'shadow-(--frame-shadow-selected)' : 'shadow-(--frame-shadow)',
-        dragging && 'z-20 cursor-grabbing shadow-(--frame-shadow-lifted)',
+        dragging && 'z-20',
         removing && 'scale-90 opacity-0',
         draggable ? 'touch-none' : 'touch-manipulation',
       )
     "
-    :style="
-      dragging && translate
-        ? { transform: `translate3d(${translate.x}px, ${translate.y}px, 0)`, transition: 'none' }
-        : undefined
-    "
+    :style="dragging ? { transition: 'none' } : undefined"
     @pointerdown="emit('dragStart', $event)"
     @click="emit('select')"
     @dblclick="emit('activate')"
   >
-    <!-- The selection ring lives on its own layer so it is not clipped by the
-         frame's padding and does not shift the image by a pixel. -->
+    <!--
+      Where the tile will land when the button comes up. The tile itself stays
+      in this cell — only the card below is offset — so an outline drawn on its
+      own layer, costing no layout, is the whole of it.
+    -->
     <span
-      v-if="selected"
+      v-if="dragging"
+      data-drop-placeholder
       aria-hidden="true"
-      class="pointer-events-none absolute inset-0 rounded-sm ring-2 ring-ring ring-offset-2 ring-offset-background"
+      class="pointer-events-none absolute inset-0 rounded-sm border-2 border-dashed border-muted-foreground/40"
     />
 
-    <div class="relative aspect-square w-full overflow-hidden rounded-xs bg-frame-well">
-      <img
-        v-if="url && !failed"
-        :src="url"
-        :alt="entry.name"
-        draggable="false"
-        decoding="async"
-        :class="
-          cn(
-            'size-full object-contain transition-opacity duration-(--motion-fast)',
-            loaded ? 'opacity-100' : 'opacity-0',
-          )
-        "
-        @load="loaded = true"
-        @error="failed = true"
+    <!--
+      The visible frame. Separate from the grid cell above so that a drag can
+      offset it without moving the cell it is being dragged out of.
+    -->
+    <div
+      :class="
+        cn(
+          'relative flex flex-col rounded-sm bg-frame p-2 text-frame-foreground',
+          'transition-[box-shadow] duration-(--motion-fast) ease-(--motion-ease)',
+          selected ? 'shadow-(--frame-shadow-selected)' : 'shadow-(--frame-shadow)',
+          dragging && 'cursor-grabbing shadow-(--frame-shadow-lifted)',
+        )
+      "
+      :style="
+        dragging && translate
+          ? { transform: `translate3d(${translate.x}px, ${translate.y}px, 0)`, transition: 'none' }
+          : undefined
+      "
+    >
+      <!-- The selection ring lives on its own layer so it is not clipped by the
+           frame's padding and does not shift the image by a pixel. -->
+      <span
+        v-if="selected"
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-0 rounded-sm ring-2 ring-ring ring-offset-2 ring-offset-background"
       />
 
-      <!--
-        HEIC is decoded here rather than by Chrome, which takes long enough to
-        watch. Shimmer rather than an empty frame, for the same reason the
-        fallback below exists.
-      -->
-      <div v-if="decoding" class="preview-shimmer absolute inset-0" aria-hidden="true" />
+      <div class="relative aspect-square w-full overflow-hidden rounded-xs bg-frame-well">
+        <img
+          v-if="url && !failed"
+          :src="url"
+          :alt="entry.name"
+          draggable="false"
+          decoding="async"
+          :class="
+            cn(
+              'size-full object-contain transition-opacity duration-(--motion-fast)',
+              loaded ? 'opacity-100' : 'opacity-0',
+            )
+          "
+          @load="loaded = true"
+          @error="failed = true"
+        />
 
-      <!--
-        A frame with nothing in it reads as a broken app. Say which it is: a
-        format nothing can decode, or a file that would not open.
-      -->
-      <div
-        v-if="noPreview"
-        class="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center"
-      >
-        <ImageOff class="size-5 text-frame-foreground/30" aria-hidden="true" />
-        <p class="text-[10px] leading-tight font-medium text-frame-foreground/55">No preview</p>
-        <p v-if="unsupported" class="text-[9px] leading-tight text-frame-foreground/40">
-          {{ entry.ext.slice(1).toUpperCase() }} can't be previewed
-        </p>
-      </div>
-    </div>
+        <!--
+          HEIC is decoded here rather than by Chrome, which takes long enough to
+          watch. Shimmer rather than an empty frame, for the same reason the
+          fallback below exists.
+        -->
+        <div v-if="decoding" class="preview-shimmer absolute inset-0" aria-hidden="true" />
 
-    <div class="mt-1.5 flex items-center gap-1">
-      <!--
-        In rename mode the new name goes on the primary line and the old one
-        below it: side by side, the arrow and the struck-through original eat
-        most of the width and truncate away the only part you are checking.
-      -->
-      <div class="min-w-0 flex-1" :title="entry.name">
-        <p class="truncate text-[11px] leading-4" :class="renaming && 'font-medium'">
-          {{ previewName ?? entry.name }}
-        </p>
-        <p
-          v-if="renaming"
-          class="truncate text-[10px] leading-3.5 text-frame-foreground/45 line-through"
+        <!--
+          A frame with nothing in it reads as a broken app. Say which it is: a
+          format nothing can decode, or a file that would not open.
+        -->
+        <div
+          v-if="noPreview"
+          class="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center"
         >
-          {{ entry.name }}
-        </p>
+          <ImageOff class="size-5 text-frame-foreground/30" aria-hidden="true" />
+          <p class="text-[10px] leading-tight font-medium text-frame-foreground/55">No preview</p>
+          <p v-if="unsupported" class="text-[9px] leading-tight text-frame-foreground/40">
+            {{ entry.ext.slice(1).toUpperCase() }} can't be previewed
+          </p>
+        </div>
       </div>
 
-      <button
-        type="button"
-        :aria-label="`Delete ${entry.name}`"
-        :class="
-          cn(
-            'shrink-0 rounded-xs p-0.5 text-frame-foreground/50 transition-colors',
-            'hover:bg-destructive/10 hover:text-destructive',
-            'focus-visible:ring-2 focus-visible:ring-destructive focus-visible:outline-none',
-            'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-            selected && 'opacity-100',
-          )
-        "
-        @click.stop="emit('remove')"
-        @pointerdown.stop
-      >
-        <Trash2 class="size-3.5" />
-      </button>
+      <div class="mt-1.5 flex items-center gap-1">
+        <!--
+          In rename mode the new name goes on the primary line and the old one
+          below it: side by side, the arrow and the struck-through original eat
+          most of the width and truncate away the only part you are checking.
+        -->
+        <div class="min-w-0 flex-1" :title="entry.name">
+          <p class="truncate text-[11px] leading-4" :class="renaming && 'font-medium'">
+            {{ previewName ?? entry.name }}
+          </p>
+          <p
+            v-if="renaming"
+            class="truncate text-[10px] leading-3.5 text-frame-foreground/45 line-through"
+          >
+            {{ entry.name }}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          :aria-label="`Delete ${entry.name}`"
+          :class="
+            cn(
+              'shrink-0 rounded-xs p-0.5 text-frame-foreground/50 transition-colors',
+              'hover:bg-destructive/10 hover:text-destructive',
+              'focus-visible:ring-2 focus-visible:ring-destructive focus-visible:outline-none',
+              'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+              selected && 'opacity-100',
+            )
+          "
+          @click.stop="emit('remove')"
+          @pointerdown.stop
+        >
+          <Trash2 class="size-3.5" />
+        </button>
+      </div>
     </div>
   </div>
 </template>

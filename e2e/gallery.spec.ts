@@ -233,8 +233,14 @@ test.describe("rename", () => {
     const box = (await target.boundingBox())!;
     // Two moves: the first crosses the drag threshold, the second lands.
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
+
+    // Mid-drag, the cell the tile would land in is outlined.
+    await expect(page.locator("[data-drop-placeholder]")).toBeVisible();
+
     await page.mouse.move(box.x + 4, box.y + 4, { steps: 4 });
     await page.mouse.up();
+
+    await expect(page.locator("[data-drop-placeholder]")).toHaveCount(0);
 
     await expect(page.getByRole("button", { name: "Custom order" })).toBeVisible();
     await expect(page.getByRole("gridcell")).toHaveText([/c\.jpg/, /a\.jpg/, /b\.jpg/]);
@@ -265,6 +271,41 @@ test.describe("rename", () => {
 
     // Undoing returns to the ordinary gallery, sorting restored.
     await expect(page.getByRole("button", { name: /Name/ })).toBeVisible();
+  });
+
+  /**
+   * The lifted card is transformed, and a transformed box still counts towards
+   * the scroller's scrollable overflow — so auto-scrolling towards it makes yet
+   * more room to scroll. Left unclamped, holding a drag at the bottom edge runs
+   * off the end of the last row and leaves an empty grid on screen.
+   */
+  test("auto-scrolls to the end of the list and no further", async ({ page }) => {
+    const files = Array.from({ length: 40 }, (_, i) => `p${String(i + 1).padStart(2, "0")}.jpg`);
+    await openGallery(page, files);
+
+    const scroller = page.locator("div.overflow-y-auto").first();
+    const bounds = (await scroller.boundingBox())!;
+
+    await tile(page, "p02.jpg").hover();
+    await page.mouse.down();
+    // Into the auto-scroll band at the bottom, then held there.
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height - 20, {
+      steps: 10,
+    });
+    await page.waitForTimeout(1500);
+
+    // How far past the end of the grid's own laid-out height we have scrolled.
+    const overscroll = await scroller.evaluate((el) => {
+      const grid = el.firstElementChild;
+      const limit = grid ? grid.getBoundingClientRect().height - el.clientHeight : 0;
+      return el.scrollTop - limit;
+    });
+    expect(overscroll).toBeLessThanOrEqual(1);
+
+    // And the last row is still on screen, rather than scrolled past.
+    await expect(page.getByRole("gridcell").last()).toBeInViewport();
+
+    await page.mouse.up();
   });
 
   test("keeps the arrangement visible after renaming", async ({ page }) => {
