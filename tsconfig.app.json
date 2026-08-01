@@ -15,5 +15,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "e2e/**/*.ts"]
+  // The harness is browser code and shares the app's aliases; the specs are Node
+  // and live in tsconfig.node.json.
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "e2e/harness.ts"]
 }

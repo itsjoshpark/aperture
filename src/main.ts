@@ -1,5 +1,3 @@
-import { createApp } from "vue";
-import "./assets/index.css";
-import App from "./App.vue";
+import { createApertureApp } from "./mount";
 
-createApp(App).mount("#app");
+createApertureApp().mount("#app");
