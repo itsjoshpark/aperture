@@ -1,4 +1,4 @@
-import { onScopeDispose, ref, shallowRef } from "vue";
+import { nextTick, onScopeDispose, ref, shallowRef } from "vue";
 import { hitTest, type GridMetrics } from "@/lib/grid-geometry";
 
 /**
@@ -123,16 +123,11 @@ export function useTileDrag(options: TileDragOptions) {
     const tile = element.value;
     if (!tile) return;
 
-    // The tile stays in its cell as the drop placeholder and only the card
-    // inside it is offset, so this rect is the laid-out position as read — and
-    // it is already the new one after a reorder has moved the tile a cell on.
-    const rect = tile.getBoundingClientRect();
-    translate.value = {
-      x: pointer.x - grabOffset.x - rect.left,
-      y: pointer.y - grabOffset.y - rect.top,
-    };
-
+    // Scroll first: it moves the cell under the card, and measuring before it
+    // would leave the card a frame behind — which, while auto-scroll runs every
+    // frame, reads as the card trailing the cursor by the whole scroll speed.
     autoScroll();
+    follow();
 
     const origin = options.gridOrigin();
     const target = hitTest(
@@ -144,10 +139,26 @@ export function useTileDrag(options: TileDragOptions) {
     if (target >= 0 && target !== draggingIndex.value) {
       options.onMove(draggingIndex.value, target);
       draggingIndex.value = target;
-      // The tile is about to be re-laid-out in its new cell; recompute against
-      // that next frame rather than letting it visibly jump.
-      schedule();
+      // The tile only reaches its new cell when Vue flushes, which is after this
+      // frame has computed the offset. Re-measure on the far side of that flush,
+      // still before the paint, or the card is drawn a cell out of place for the
+      // frame the reorder lands on.
+      void nextTick(follow);
     }
+  }
+
+  /** Put the card back under the cursor, wherever its cell has ended up. */
+  function follow(): void {
+    const tile = element.value;
+    if (!tile) return;
+
+    // The tile stays in its cell as the drop placeholder and only the card
+    // inside it is offset, so this rect is the laid-out position as read.
+    const rect = tile.getBoundingClientRect();
+    translate.value = {
+      x: pointer.x - grabOffset.x - rect.left,
+      y: pointer.y - grabOffset.y - rect.top,
+    };
   }
 
   function autoScroll(): void {
