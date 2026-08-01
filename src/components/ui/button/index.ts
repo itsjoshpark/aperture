@@ -3,19 +3,29 @@ import { cva } from "class-variance-authority";
 
 export { default as Button } from "./Button.vue";
 
+/*
+ * Aperture change: the variant axis is collapsed to one raised control face
+ * (see `.control-face` in `assets/index.css`). Aperture has a single button
+ * treatment on purpose, so shadcn's `ghost` / `outline` / `secondary` / `link`
+ * no longer name anything distinct and are gone.
+ *
+ * Aperture change: focus is an `outline`, not shadcn's `ring-*`. Tailwind v4
+ * draws rings with `box-shadow`, which is what the face uses for its lift — a
+ * ring here would erase the button's depth, or be erased by it.
+ */
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-(--motion-fast) ease-(--motion-ease) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
-        outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: "control-face",
+        destructive: "control-face control-face-destructive",
+        /*
+         * Aperture change: the documented way out of the system. The large
+         * view's controls float over the photograph itself, where a raised
+         * chrome-coloured pill would compete with the image.
+         */
+        overlay: "text-white hover:bg-white/10 hover:text-white",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

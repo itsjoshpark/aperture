@@ -100,12 +100,7 @@ const canApply = computed(
       </div>
 
       <div class="ml-auto flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          :disabled="rename.applying.value"
-          @click="aperture.exitRename()"
-        >
+        <Button size="sm" :disabled="rename.applying.value" @click="aperture.exitRename()">
           {{ rename.applied.value ? "Done" : "Cancel" }}
         </Button>
 
@@ -115,7 +110,6 @@ const canApply = computed(
         -->
         <Button
           v-if="rename.applied.value"
-          variant="outline"
           size="sm"
           class="gap-1.5"
           :disabled="rename.applying.value"

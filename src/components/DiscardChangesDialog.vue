@@ -49,7 +49,7 @@ async function renameThenProceed(): Promise<void> {
         <AlertDialogCancel class="mt-0">Cancel</AlertDialogCancel>
         <div class="flex gap-2">
           <AlertDialogAction as-child>
-            <Button variant="outline" @click="guard.proceed()">Discard changes</Button>
+            <Button @click="guard.proceed()">Discard changes</Button>
           </AlertDialogAction>
           <AlertDialogAction
             as-child

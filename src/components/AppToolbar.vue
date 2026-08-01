@@ -13,7 +13,7 @@ const count = computed(() => aperture.displayed.value.length);
 
 <template>
   <header class="flex items-center gap-2 border-b bg-card/60 px-3 py-2 backdrop-blur">
-    <Button variant="ghost" size="sm" class="gap-1.5" @click="aperture.openFolder()">
+    <Button size="sm" class="gap-1.5" @click="aperture.openFolder()">
       <FolderOpen class="size-4" />
       Open folder
     </Button>
@@ -36,7 +36,6 @@ const count = computed(() => aperture.displayed.value.length);
       -->
       <Button
         v-if="!rename.active.value"
-        variant="ghost"
         size="sm"
         class="gap-1.5"
         :disabled="count === 0"
@@ -48,7 +47,6 @@ const count = computed(() => aperture.displayed.value.length);
 
       <Button
         v-if="rename.canUndo.value && !rename.active.value"
-        variant="ghost"
         size="sm"
         class="gap-1.5"
         @click="aperture.undoRename()"

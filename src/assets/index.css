@@ -42,6 +42,52 @@
   /* The empty cell an image sits in before it has decoded. */
   --frame-well: oklch(0.93 0 0);
 
+  /*
+   * Controls are physical, for the same reason the thumbnails are: this is a
+   * tool for handling photographs, and every button is a thing you push. One
+   * face for all of them — a lit top edge, a gradient falling away towards the
+   * bottom, and a shadow it sits on — inverted on press so the button reads as
+   * pushed into the chrome rather than merely recoloured.
+   *
+   * The face is `--primary` made three-dimensional, so it flips with the theme:
+   * near-white on dark chrome, charcoal on light. Note that the stops cannot be
+   * an opacity modifier on one colour — `/90` darkens over dark chrome and
+   * lightens over light chrome, and "darker towards the bottom" has to hold in
+   * both.
+   */
+  --control-top: oklch(0.36 0 0);
+  --control-bottom: oklch(0.235 0 0);
+  --control-foreground: oklch(0.98 0 0);
+  --control-inner-lit: oklch(1 0 0 / 0.16);
+  --control-inner-dark: oklch(0 0 0 / 0.55);
+  --control-destructive-top: oklch(0.62 0.22 27.3);
+  --control-destructive-bottom: oklch(0.51 0.2 27.3);
+
+  /* The menu panel is the same material as the trigger that opened it, so its
+   * dividers cannot use `--border`, which is tuned to the chrome behind it. */
+  --control-divider: oklch(0 0 0 / 0.12);
+
+  /*
+   * Highlighting a menu row presses it in. The panel is the face, so it flips
+   * with the theme, and so must the recess: a black wash reads as a dent in a
+   * near-white panel and as nothing at all in a charcoal one. These are the
+   * charcoal-panel values — deep enough to show against `--control-top` above.
+   */
+  --control-item-top: oklch(0 0 0 / 0.45);
+  --control-item-bottom: oklch(0 0 0 / 0.22);
+  --control-item-lip: oklch(1 0 0 / 0.1);
+
+  /*
+   * Raised, and pressed. Theme-independent: what changes between light and dark
+   * is the face colour, not the direction the light comes from.
+   */
+  --control-lift:
+    inset 0 1px 0 var(--control-inner-lit), 0 1px 1px oklch(0 0 0 / 0.3),
+    0 2px 5px oklch(0 0 0 / 0.22);
+  --control-press:
+    inset 0 2px 4px var(--control-inner-dark), inset 0 -1px 0 var(--control-inner-lit),
+    0 1px 0 oklch(0 0 0 / 0.18);
+
   /* Every duration in the app resolves to one of these. */
   --motion-fast: 140ms;
   --motion-base: 200ms;
@@ -71,6 +117,18 @@
   --ring: oklch(0.68 0.15 250);
 
   --frame-well: oklch(0.88 0 0);
+
+  --control-top: oklch(0.98 0 0);
+  --control-bottom: oklch(0.855 0 0);
+  --control-foreground: oklch(0.2 0 0);
+  --control-inner-lit: oklch(1 0 0 / 0.9);
+  --control-inner-dark: oklch(0 0 0 / 0.28);
+  --control-destructive-top: oklch(0.66 0.21 27.3);
+  --control-destructive-bottom: oklch(0.55 0.2 27.3);
+
+  --control-item-top: oklch(0 0 0 / 0.16);
+  --control-item-bottom: oklch(0 0 0 / 0.06);
+  --control-item-lip: oklch(1 0 0 / 0.7);
 }
 
 @theme inline {
@@ -144,6 +202,98 @@
 }
 
 @layer components {
+  /*
+   * The one control face. Every button and the sort menu wear this; there is no
+   * second treatment, so hierarchy between sibling actions comes from position
+   * and wording rather than from colour.
+   *
+   * The lift is a `box-shadow`, which is also how Tailwind v4 draws `ring-*` —
+   * the two cannot coexist on one element without one of them silently winning.
+   * That is why `buttonVariants` puts focus on `outline` instead.
+   */
+  .control-face {
+    background-image: linear-gradient(to bottom, var(--control-top), var(--control-bottom));
+    color: var(--control-foreground);
+    box-shadow: var(--control-lift);
+    transition:
+      background-image var(--motion-fast) var(--motion-ease),
+      box-shadow var(--motion-fast) var(--motion-ease),
+      translate var(--motion-fast) var(--motion-ease);
+  }
+
+  .control-face:hover {
+    background-image: linear-gradient(
+      to bottom,
+      color-mix(in oklab, white 8%, var(--control-top)),
+      color-mix(in oklab, white 8%, var(--control-bottom))
+    );
+  }
+
+  /*
+   * Pressed. `[data-state=open]` is the dropdown trigger: a menu is a button
+   * held down, and it should stay held down for as long as the menu is up.
+   */
+  .control-face:active,
+  .control-face[data-state="open"] {
+    background-image: linear-gradient(to bottom, var(--control-bottom), var(--control-top));
+    box-shadow: var(--control-press);
+    translate: 0 1px;
+  }
+
+  .control-face-destructive {
+    --control-top: var(--control-destructive-top);
+    --control-bottom: var(--control-destructive-bottom);
+    --control-foreground: oklch(0.98 0 0);
+    --control-inner-lit: oklch(1 0 0 / 0.24);
+    --control-inner-dark: oklch(0 0 0 / 0.5);
+  }
+
+  /*
+   * The tile delete button sits on `--frame`, the white mat, which is white in
+   * both themes — so it cannot take the themed face or it would be a white pill
+   * on white card in the dark. It is dark either way, and goes red on hover
+   * because of what it does.
+   */
+  .control-face-frame {
+    --control-top: oklch(0.42 0 0);
+    --control-bottom: oklch(0.3 0 0);
+    --control-foreground: oklch(0.97 0 0);
+    --control-inner-lit: oklch(1 0 0 / 0.18);
+    --control-inner-dark: oklch(0 0 0 / 0.55);
+  }
+
+  .control-face-frame:hover {
+    --control-top: var(--control-destructive-top);
+    --control-bottom: var(--control-destructive-bottom);
+  }
+
+  /*
+   * A menu is the trigger extruding a slab, so the panel is the same material
+   * as the face that opened it. Rows go the other way — highlighting one pushes
+   * it in, which is the only inset in the system that is not also a press.
+   */
+  .control-panel {
+    background-image: linear-gradient(to bottom, var(--control-top), var(--control-bottom));
+    color: var(--control-foreground);
+    border-color: var(--control-divider);
+    box-shadow:
+      inset 0 1px 0 var(--control-inner-lit),
+      0 2px 6px oklch(0 0 0 / 0.28),
+      0 10px 28px oklch(0 0 0 / 0.34);
+  }
+
+  .control-item:focus,
+  .control-item[data-highlighted] {
+    background-image: linear-gradient(
+      to bottom,
+      var(--control-item-top),
+      var(--control-item-bottom)
+    );
+    box-shadow:
+      inset 0 1px 2px oklch(0 0 0 / 0.22),
+      inset 0 -1px 0 var(--control-item-lip);
+  }
+
   /*
    * The wait while a HEIC is decoded.
    *
