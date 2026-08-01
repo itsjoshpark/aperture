@@ -28,9 +28,24 @@ export function columnCount(containerWidth: number, minTileWidth: number, gap: n
   return Math.max(1, Math.floor((containerWidth + gap) / (minTileWidth + gap)));
 }
 
-export function cellWidthFor(containerWidth: number, columns: number, gap: number): number {
-  if (columns <= 0) return containerWidth;
-  return (containerWidth - gap * (columns - 1)) / columns;
+/**
+ * The width the browser gives each track.
+ *
+ * `minmax(tile, 1fr)` has a floor: when the container is narrower than a single
+ * tile, `auto-fill` still produces one column and that column *overflows* the
+ * container rather than shrinking. Dividing the container width alone would
+ * report a cell narrower than the one on screen, and drag hit-testing would
+ * drift. Only reachable at large tile sizes in a narrow window — which is
+ * exactly where nobody would think to look.
+ */
+export function cellWidthFor(
+  containerWidth: number,
+  columns: number,
+  gap: number,
+  minTileWidth = 0,
+): number {
+  if (columns <= 0) return Math.max(containerWidth, minTileWidth);
+  return Math.max((containerWidth - gap * (columns - 1)) / columns, minTileWidth);
 }
 
 export function indexToCell(index: number, columns: number): { row: number; column: number } {

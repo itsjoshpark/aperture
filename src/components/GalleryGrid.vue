@@ -38,7 +38,7 @@ const metrics = (): GridMetrics => {
   const first = grid.value?.firstElementChild as HTMLElement | null;
   return {
     columns,
-    cellWidth: cellWidthFor(width.value, columns, GAP),
+    cellWidth: cellWidthFor(width.value, columns, GAP, gallery.tileSize.value),
     // Measured rather than derived: the tile's height depends on its footer,
     // the font, and the tile size, and guessing it makes drops land one row off.
     cellHeight: first?.getBoundingClientRect().height ?? gallery.tileSize.value,

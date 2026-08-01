@@ -37,6 +37,16 @@ describe("cellWidthFor", () => {
   it("gives a single column the whole width", () => {
     expect(cellWidthFor(300, 1, 10)).toBe(300);
   });
+
+  it("never reports a cell narrower than the tile minimum", () => {
+    // `minmax(320px, 1fr)` overflows a 200px container rather than shrinking,
+    // so the cell on screen is 320px wide. See the browser test for proof.
+    expect(cellWidthFor(200, 1, 10, 320)).toBe(320);
+  });
+
+  it("ignores the minimum once the columns are wider than it", () => {
+    expect(cellWidthFor(430, 4, 10, 80)).toBe(100);
+  });
 });
 
 describe("indexToCell", () => {
