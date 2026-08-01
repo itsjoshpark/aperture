@@ -94,6 +94,11 @@ by the time the confirm handler looks for it — the confirm silently does nothi
 therefore track _whether they are open_ separately from _what they are about_
 (`deleteDialogOpen` / `pendingDelete`, `guard.open` / `guard.pending`). Do not merge them back.
 
+**A rename session stays open after applying**, with its button switched to Undo. That means the
+draft is holding `ImageEntry` objects whose names no longer exist, so `apply()` re-materialises it
+against the refreshed listing. Anything that keeps the session alive across a disk change has to do
+the same.
+
 **`columnCount()` reimplements a browser decision** — how many tracks `auto-fill` produces — and
 arrow keys and drag hit-testing both trust it. `grid-geometry.browser.test.ts` checks it against
 real layout across a matrix of widths and tile sizes. If you change the grid CSS, that test is what

@@ -16,9 +16,24 @@ browser's File System Access API, so your photos never leave your machine.
 - **Large view** — press `Space` for a full-size image with a filmstrip along the bottom.
 - **Delete** — from the tile's trash icon or the `Delete` key. This is a permanent delete, not a
   move to the Trash.
-- **Sequential rename** — start dragging a thumbnail and Aperture switches to rename mode. Arrange
-  the images, set a prefix and/or suffix, and preview every new name before committing. One-click
-  undo afterwards.
+- **Sequential rename** — start dragging a thumbnail (or press `Cmd`/`Ctrl` + `←`/`→`) and Aperture
+  switches to rename mode. Arrange the images, set a prefix and/or suffix, and see every new name on
+  its tile before you commit. Afterwards the Rename button becomes Undo, which puts every original
+  name back.
+
+## Keyboard
+
+| Key                    | Grid                       | Large view            |
+| ---------------------- | -------------------------- | --------------------- |
+| `←` `→`                | move selection             | previous / next image |
+| `↑` `↓`                | move a row                 | —                     |
+| `Home` `End`           | first / last               | first / last          |
+| `Space`                | open large view            | back to the grid      |
+| `Delete`               | confirm, then delete       | confirm, then delete  |
+| `Cmd`/`Ctrl` + `←` `→` | reorder the selected image | —                     |
+| `Esc`                  | leave rename mode          | back to the grid      |
+
+`Esc` never clears your selection.
 
 ## Requirements
 
