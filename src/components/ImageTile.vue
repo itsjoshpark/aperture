@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useIntersectionObserver } from "@vueuse/core";
-import { Trash2 } from "lucide-vue-next";
+import { ImageOff, Trash2 } from "lucide-vue-next";
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { isPreviewable } from "@/lib/file-names";
 import type { ImageEntry } from "@/lib/fs/types";
 import type { ThumbnailCache } from "@/lib/thumbnails";
 import { cn } from "@/lib/utils";
@@ -28,10 +29,19 @@ const emit = defineEmits<{
 const root = shallowRef<HTMLElement | null>(null);
 const url = ref<string | null>(null);
 const loaded = ref(false);
+const failed = ref(false);
 let held: string | null = null;
 
 /** True only when this tile's name would actually change. */
 const renaming = computed(() => !!props.previewName && props.previewName !== props.entry.name);
+
+/**
+ * Known-undecodable formats are reported without even trying, so there is no
+ * flash of empty frame; anything else falls back to the `error` event, which
+ * covers corrupt files and formats we have not thought of.
+ */
+const unsupported = computed(() => !isPreviewable(props.entry.name));
+const noPreview = computed(() => unsupported.value || failed.value);
 
 /**
  * A folder of 2,000 photos is far more pixel data than a tab can hold, so a tile
@@ -52,6 +62,9 @@ async function acquire(): Promise<void> {
   if (held === props.entry.name) return;
   release();
 
+  // No point decoding bytes the browser has no decoder for.
+  if (unsupported.value) return;
+
   const name = props.entry.name;
   const next = await props.cache.acquire(props.entry);
   // The tile may have been recycled onto a different file while we were reading.
@@ -69,6 +82,7 @@ function release(): void {
   held = null;
   url.value = null;
   loaded.value = false;
+  failed.value = false;
 }
 
 // Renaming changes the cache key, so the tile has to re-read under the new name.
@@ -124,7 +138,7 @@ defineExpose({
 
     <div class="relative aspect-square w-full overflow-hidden rounded-xs bg-frame-well">
       <img
-        v-if="url"
+        v-if="url && !failed"
         :src="url"
         :alt="entry.name"
         draggable="false"
@@ -136,7 +150,23 @@ defineExpose({
           )
         "
         @load="loaded = true"
+        @error="failed = true"
       />
+
+      <!--
+        A frame with nothing in it reads as a broken app. Say which it is: a
+        format this browser has no decoder for, or a file that would not open.
+      -->
+      <div
+        v-if="noPreview"
+        class="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center"
+      >
+        <ImageOff class="size-5 text-frame-foreground/30" aria-hidden="true" />
+        <p class="text-[10px] leading-tight font-medium text-frame-foreground/55">No preview</p>
+        <p v-if="unsupported" class="text-[9px] leading-tight text-frame-foreground/40">
+          {{ entry.ext.slice(1).toUpperCase() }} isn't supported by this browser
+        </p>
+      </div>
     </div>
 
     <div class="mt-1.5 flex items-center gap-1">

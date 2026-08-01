@@ -30,8 +30,15 @@ export class FsaAdapter implements FileSystemPort {
 
   private readonly dir: FileSystemDirectoryHandle;
 
-  constructor(dir: FileSystemDirectoryHandle) {
+  /**
+   * `allowMove: false` forces the copy-then-delete path. Tests need it: the
+   * origin private file system supports `move()`, so without it the fallback —
+   * which is what essentially every real rename uses, because `move()` is
+   * flag-gated for picked folders — would never be exercised.
+   */
+  constructor(dir: FileSystemDirectoryHandle, options: { allowMove?: boolean } = {}) {
     this.dir = dir;
+    this.canMove = options.allowMove ?? true;
   }
 
   get label(): string {

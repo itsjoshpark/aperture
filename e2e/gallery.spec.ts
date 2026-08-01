@@ -164,17 +164,61 @@ test.describe("delete", () => {
   });
 });
 
-test("resizes the previews with the slider", async ({ page }) => {
-  await openGallery(page);
+test.describe("preview size", () => {
+  const sizeSlider = (page: Page) => page.getByRole("slider", { name: "Preview size" });
 
-  const first = tile(page, "beach.jpg");
-  const before = (await first.boundingBox())!.width;
+  test("resizes the previews with the slider", async ({ page }) => {
+    await openGallery(page);
 
-  await page.getByRole("slider", { name: "Preview size" }).press("ArrowRight");
-  await page.getByRole("slider", { name: "Preview size" }).press("ArrowRight");
-  await page.getByRole("slider", { name: "Preview size" }).press("ArrowRight");
+    const first = tile(page, "beach.jpg");
+    const before = (await first.boundingBox())!.width;
 
-  await expect.poll(async () => (await first.boundingBox())!.width).not.toBeCloseTo(before, 0);
+    await sizeSlider(page).press("ArrowRight");
+    await sizeSlider(page).press("ArrowRight");
+    await sizeSlider(page).press("ArrowRight");
+
+    await expect.poll(async () => (await first.boundingBox())!.width).not.toBeCloseTo(before, 0);
+  });
+
+  /**
+   * The slider takes focus on pointerdown, as it must to be draggable. If it
+   * keeps focus afterwards, the arrow keys stay pointed at it and the only way
+   * back to the gallery is the mouse — which is precisely the escape route
+   * someone navigating by keyboard does not have.
+   */
+  test("hands focus back after a drag, so the arrow keys still move the selection", async ({
+    page,
+  }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
+    await expect(selected(page)).toHaveText(/a\.jpg/);
+
+    const thumb = (await sizeSlider(page).boundingBox())!;
+    await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(thumb.x + thumb.width / 2 + 60, thumb.y + thumb.height / 2, { steps: 8 });
+    await page.mouse.up();
+
+    // The drag has to have done something, or focus proves nothing.
+    await expect(sizeSlider(page)).not.toHaveAttribute("aria-valuenow", "160");
+
+    await page.keyboard.press("ArrowRight");
+    await expect(selected(page)).toHaveText(/b\.jpg/);
+  });
+
+  test("remembers the size across a reload", async ({ page }) => {
+    await openGallery(page);
+
+    await sizeSlider(page).press("ArrowRight");
+    await sizeSlider(page).press("ArrowRight");
+    const chosen = await sizeSlider(page).getAttribute("aria-valuenow");
+    expect(chosen).not.toBe("160");
+
+    await page.reload();
+    await page.getByRole("button", { name: "Open folder…" }).click();
+    await expect(page.getByRole("grid")).toBeVisible();
+
+    await expect(sizeSlider(page)).toHaveAttribute("aria-valuenow", chosen!);
+  });
 });
 
 test.describe("rename", () => {
@@ -292,4 +336,64 @@ test("explains files left behind by an interrupted rename", async ({ page }) => 
 
   await expect(page.getByRole("alert")).toContainText("2 files left over");
   await expect(page.getByRole("alert")).toContainText("Nothing was lost");
+});
+
+test("actually renders the images", async ({ page }) => {
+  // The one thing every other test takes for granted. `naturalWidth` is the
+  // check that matters: a tile with a src that failed to decode still has an
+  // <img>, and still looks exactly like an empty frame.
+  await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
+
+  const images = page.getByRole("grid").locator("img");
+  await expect(images).toHaveCount(3);
+
+  for (let i = 0; i < 3; i += 1) {
+    await expect
+      .poll(() => images.nth(i).evaluate((img: { naturalWidth: number }) => img.naturalWidth))
+      .toBe(64);
+    await expect(images.nth(i)).toBeVisible();
+  }
+});
+
+test("renders the image in the large view and the filmstrip", async ({ page }) => {
+  await openGallery(page, ["a.jpg", "b.jpg"]);
+  await page.keyboard.press(" ");
+
+  const main = page.locator("[data-large-image]");
+  await expect
+    .poll(() => main.evaluate((img: { naturalWidth: number }) => img.naturalWidth))
+    .toBe(64);
+
+  const strip = page.getByRole("listbox", { name: "Images in this folder" }).locator("img");
+  await expect(strip).toHaveCount(2);
+  await expect
+    .poll(() => strip.first().evaluate((img: { naturalWidth: number }) => img.naturalWidth))
+    .toBe(64);
+});
+
+/**
+ * Chrome draws no HEIC and no TIFF, and a camera roll off an iPhone is mostly
+ * HEIC. Those files belong in the gallery — culling and renaming them is the
+ * point — but an empty white frame is indistinguishable from a broken app, so
+ * every surface has to say which it is.
+ */
+test("says there is no preview for a format the browser cannot decode", async ({ page }) => {
+  await openGallery(page, ["IMG_0042.heic", "b.jpg"]);
+
+  const undecodable = tile(page, "IMG_0042.heic");
+  await expect(undecodable).toContainText("No preview");
+  await expect(undecodable.locator("img")).toHaveCount(0);
+
+  // The decodable neighbour is unaffected.
+  await expect(tile(page, "b.jpg").locator("img")).toHaveCount(1);
+
+  await undecodable.click();
+  await page.keyboard.press(" ");
+  await expect(page.getByText("No preview available")).toBeVisible();
+  await expect(page.getByText(/HEIC decoder/)).toBeVisible();
+  await expect(page.locator("[data-large-image]")).toHaveCount(0);
+
+  // The filmstrip draws the one file it can and an icon for the one it cannot.
+  const strip = page.getByRole("listbox", { name: "Images in this folder" });
+  await expect(strip.locator("img")).toHaveCount(1);
 });
