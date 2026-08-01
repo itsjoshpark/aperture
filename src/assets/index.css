@@ -45,9 +45,9 @@
   /*
    * Controls are physical, for the same reason the thumbnails are: this is a
    * tool for handling photographs, and every button is a thing you push. One
-   * face for all of them — a lit top edge, a gradient falling away towards the
-   * bottom, and a shadow it sits on — inverted on press so the button reads as
-   * pushed into the chrome rather than merely recoloured.
+   * face for all of them — a gradient falling away towards the bottom and a
+   * shadow it sits on — inverted on press so the button reads as pushed into
+   * the chrome rather than merely recoloured.
    *
    * The face is `--primary` made three-dimensional, so it flips with the theme:
    * near-white on dark chrome, charcoal on light. Note that the stops cannot be
@@ -58,7 +58,6 @@
   --control-top: oklch(0.36 0 0);
   --control-bottom: oklch(0.235 0 0);
   --control-foreground: oklch(0.98 0 0);
-  --control-inner-lit: oklch(1 0 0 / 0.16);
   --control-inner-dark: oklch(0 0 0 / 0.55);
   --control-destructive-top: oklch(0.62 0.22 27.3);
   --control-destructive-bottom: oklch(0.51 0.2 27.3);
@@ -93,13 +92,15 @@
   /*
    * Raised, and pressed. Theme-independent: what changes between light and dark
    * is the face colour, not the direction the light comes from.
+   *
+   * Deliberately no 1px inner highlight along the top edge. It is the classic
+   * way to draw a lit lip, but on a face this small it reads as a stray white
+   * sliver rather than as light, and on press it jumps to the bottom edge —
+   * which compounds with the 1px drop below and makes the button look like it
+   * lurches. The gradient already says which way the light comes from.
    */
-  --control-lift:
-    inset 0 1px 0 var(--control-inner-lit), 0 1px 1px oklch(0 0 0 / 0.3),
-    0 2px 5px oklch(0 0 0 / 0.22);
-  --control-press:
-    inset 0 2px 4px var(--control-inner-dark), inset 0 -1px 0 var(--control-inner-lit),
-    0 1px 0 oklch(0 0 0 / 0.18);
+  --control-lift: 0 1px 1px oklch(0 0 0 / 0.3), 0 2px 5px oklch(0 0 0 / 0.22);
+  --control-press: inset 0 2px 4px var(--control-inner-dark), 0 1px 0 oklch(0 0 0 / 0.18);
 
   /* Every duration in the app resolves to one of these. */
   --motion-fast: 140ms;
@@ -134,7 +135,6 @@
   --control-top: oklch(0.98 0 0);
   --control-bottom: oklch(0.855 0 0);
   --control-foreground: oklch(0.2 0 0);
-  --control-inner-lit: oklch(1 0 0 / 0.9);
   --control-inner-dark: oklch(0 0 0 / 0.28);
   --control-destructive-top: oklch(0.66 0.21 27.3);
   --control-destructive-bottom: oklch(0.55 0.2 27.3);
@@ -257,7 +257,6 @@
     --control-top: var(--control-primary-top);
     --control-bottom: var(--control-primary-bottom);
     --control-foreground: oklch(0.99 0 0);
-    --control-inner-lit: oklch(1 0 0 / 0.28);
     --control-inner-dark: oklch(0 0 0 / 0.45);
   }
 
@@ -265,7 +264,6 @@
     --control-top: var(--control-destructive-top);
     --control-bottom: var(--control-destructive-bottom);
     --control-foreground: oklch(0.98 0 0);
-    --control-inner-lit: oklch(1 0 0 / 0.24);
     --control-inner-dark: oklch(0 0 0 / 0.5);
   }
 
@@ -279,7 +277,6 @@
     --control-top: oklch(0.42 0 0);
     --control-bottom: oklch(0.3 0 0);
     --control-foreground: oklch(0.97 0 0);
-    --control-inner-lit: oklch(1 0 0 / 0.18);
     --control-inner-dark: oklch(0 0 0 / 0.55);
   }
 
@@ -298,7 +295,6 @@
     color: var(--control-foreground);
     border-color: var(--control-divider);
     box-shadow:
-      inset 0 1px 0 var(--control-inner-lit),
       0 2px 6px oklch(0 0 0 / 0.28),
       0 10px 28px oklch(0 0 0 / 0.34);
   }
