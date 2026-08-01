@@ -372,15 +372,14 @@ test("renders the image in the large view and the filmstrip", async ({ page }) =
 });
 
 /**
- * Chrome draws no HEIC and no TIFF, and a camera roll off an iPhone is mostly
- * HEIC. Those files belong in the gallery — culling and renaming them is the
- * point — but an empty white frame is indistinguishable from a broken app, so
- * every surface has to say which it is.
+ * Chrome draws no TIFF and Aperture ships no decoder for it. Those files belong
+ * in the gallery — culling and renaming them is the point — but an empty white
+ * frame is indistinguishable from a broken app, so every surface has to say so.
  */
-test("says there is no preview for a format the browser cannot decode", async ({ page }) => {
-  await openGallery(page, ["IMG_0042.heic", "b.jpg"]);
+test("says there is no preview for a format nothing can decode", async ({ page }) => {
+  await openGallery(page, ["scan.tiff", "b.jpg"]);
 
-  const undecodable = tile(page, "IMG_0042.heic");
+  const undecodable = tile(page, "scan.tiff");
   await expect(undecodable).toContainText("No preview");
   await expect(undecodable.locator("img")).toHaveCount(0);
 
@@ -390,10 +389,41 @@ test("says there is no preview for a format the browser cannot decode", async ({
   await undecodable.click();
   await page.keyboard.press(" ");
   await expect(page.getByText("No preview available")).toBeVisible();
-  await expect(page.getByText(/HEIC decoder/)).toBeVisible();
+  await expect(page.getByText(/can draw TIFF/)).toBeVisible();
   await expect(page.locator("[data-large-image]")).toHaveCount(0);
 
   // The filmstrip draws the one file it can and an icon for the one it cannot.
   const strip = page.getByRole("listbox", { name: "Images in this folder" });
   await expect(strip.locator("img")).toHaveCount(1);
+});
+
+/**
+ * A camera roll off an iPhone is mostly HEIC, which Chrome will not draw at any
+ * price — so these photos only appear if the libheif worker did its job, all the
+ * way from the grid tile to the large view.
+ */
+test("decodes HEIC photos Chrome cannot draw", async ({ page }) => {
+  await openGallery(page, ["IMG_0042.heic", "b.jpg"]);
+
+  const decoded = tile(page, "IMG_0042.heic").locator("img");
+  // The first HEIC in a session also spins up a worker and instantiates a
+  // megabyte of wasm, which is quick once `optimizeDeps` has pre-bundled it but
+  // not free on a cold CI machine.
+  await expect(decoded).toHaveCount(1, { timeout: 15_000 });
+  await expect
+    .poll(() => decoded.evaluate((img: { naturalWidth: number }) => img.naturalWidth))
+    .toBe(64);
+
+  await tile(page, "IMG_0042.heic").click();
+  await page.keyboard.press(" ");
+
+  const large = page.locator("[data-large-image]");
+  await expect(large).toBeVisible();
+  await expect
+    .poll(() => large.evaluate((img: { naturalWidth: number }) => img.naturalWidth))
+    .toBe(64);
+
+  // Both photos draw in the filmstrip, decoded or not.
+  const strip = page.getByRole("listbox", { name: "Images in this folder" });
+  await expect(strip.locator("img")).toHaveCount(2);
 });

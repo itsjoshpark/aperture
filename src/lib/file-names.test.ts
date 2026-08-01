@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { isImageName, splitName } from "./file-names";
+import { isImageName, isPreviewable, needsDecoding, splitName } from "./file-names";
 
 describe("splitName", () => {
   it("splits an ordinary filename", () => {
@@ -45,6 +45,49 @@ describe("isImageName", () => {
     "rejects %s",
     (name) => {
       expect(isImageName(name)).toBe(false);
+    },
+  );
+});
+
+describe("isPreviewable", () => {
+  it.each(["photo.jpg", "photo.PNG", "photo.webp", "photo.avif", "photo.gif", "photo.bmp"])(
+    "accepts %s, which the browser draws itself",
+    (name) => {
+      expect(isPreviewable(name)).toBe(true);
+    },
+  );
+
+  // Chrome draws no HEIC, but Aperture decodes it — so it is previewable.
+  it.each(["IMG_0042.heic", "IMG_0042.HEIC", "photo.heif"])(
+    "accepts %s, which we decode",
+    (name) => {
+      expect(isPreviewable(name)).toBe(true);
+    },
+  );
+
+  it.each(["scan.tif", "scan.TIFF"])("rejects %s, which nothing here can draw", (name) => {
+    expect(isPreviewable(name)).toBe(false);
+  });
+
+  // A denylist, so anything unrecognised is attempted and falls back on `error`.
+  it("attempts formats it does not recognise", () => {
+    expect(isPreviewable("photo.jxl")).toBe(true);
+    expect(isPreviewable("photo")).toBe(true);
+  });
+});
+
+describe("needsDecoding", () => {
+  it.each(["IMG_0042.heic", "IMG_0042.HEIC", "photo.heif", "photo.HEIF"])(
+    "is true for %s",
+    (name) => {
+      expect(needsDecoding(name)).toBe(true);
+    },
+  );
+
+  it.each(["photo.jpg", "photo.png", "scan.tiff", "photo", "notes.txt"])(
+    "is false for %s",
+    (name) => {
+      expect(needsDecoding(name)).toBe(false);
     },
   );
 });

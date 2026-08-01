@@ -30,18 +30,27 @@ const root = shallowRef<HTMLElement | null>(null);
 const url = ref<string | null>(null);
 const loaded = ref(false);
 const failed = ref(false);
-let held: string | null = null;
+const pending = ref(false);
+/**
+ * The name this tile has an outstanding `acquire()` for. Tracked separately from
+ * `url`, because a HEIC takes hundreds of milliseconds to decode and everything
+ * that can happen to a tile — scrolling away, being recycled onto another file,
+ * a rename — can happen inside that window.
+ */
+let requested: string | null = null;
 
 /** True only when this tile's name would actually change. */
 const renaming = computed(() => !!props.previewName && props.previewName !== props.entry.name);
 
 /**
  * Known-undecodable formats are reported without even trying, so there is no
- * flash of empty frame; anything else falls back to the `error` event, which
- * covers corrupt files and formats we have not thought of.
+ * flash of empty frame; anything else falls back to the `error` event and to a
+ * rejected acquire, which between them cover corrupt files, HEICs libheif will
+ * not read, and formats we have not thought of.
  */
 const unsupported = computed(() => !isPreviewable(props.entry.name));
 const noPreview = computed(() => unsupported.value || failed.value);
+const decoding = computed(() => pending.value && !noPreview.value);
 
 /**
  * A folder of 2,000 photos is far more pixel data than a tab can hold, so a tile
@@ -59,37 +68,54 @@ useIntersectionObserver(
 );
 
 async function acquire(): Promise<void> {
-  if (held === props.entry.name) return;
+  const name = props.entry.name;
+  if (requested === name) return;
   release();
 
-  // No point decoding bytes the browser has no decoder for.
+  // No point reading bytes nothing can turn into an image.
   if (unsupported.value) return;
 
-  const name = props.entry.name;
-  const next = await props.cache.acquire(props.entry);
-  // The tile may have been recycled onto a different file while we were reading.
-  if (props.entry.name !== name) {
+  requested = name;
+  pending.value = true;
+
+  let next: string;
+  try {
+    next = await props.cache.acquire(props.entry);
+  } catch {
+    // Released while we waited — the cache has already been told, and whatever
+    // replaced this request owns the tile now.
+    if (requested !== name) return;
+    pending.value = false;
+    failed.value = true;
+    return;
+  }
+
+  // The tile may have been recycled onto a different file, or scrolled out of
+  // view, while we were reading. The ref is ours to hand back either way.
+  if (requested !== name) {
     props.cache.release(name);
     return;
   }
-  held = name;
+  pending.value = false;
   url.value = next;
 }
 
 function release(): void {
-  if (!held) return;
-  props.cache.release(held);
-  held = null;
   url.value = null;
   loaded.value = false;
   failed.value = false;
+  pending.value = false;
+
+  if (requested === null) return;
+  props.cache.release(requested);
+  requested = null;
 }
 
 // Renaming changes the cache key, so the tile has to re-read under the new name.
 watch(
   () => props.entry.name,
   () => {
-    if (held) acquire();
+    if (requested) acquire();
   },
 );
 
@@ -154,8 +180,15 @@ defineExpose({
       />
 
       <!--
+        HEIC is decoded here rather than by Chrome, which takes long enough to
+        watch. Shimmer rather than an empty frame, for the same reason the
+        fallback below exists.
+      -->
+      <div v-if="decoding" class="preview-shimmer absolute inset-0" aria-hidden="true" />
+
+      <!--
         A frame with nothing in it reads as a broken app. Say which it is: a
-        format this browser has no decoder for, or a file that would not open.
+        format nothing can decode, or a file that would not open.
       -->
       <div
         v-if="noPreview"
@@ -164,7 +197,7 @@ defineExpose({
         <ImageOff class="size-5 text-frame-foreground/30" aria-hidden="true" />
         <p class="text-[10px] leading-tight font-medium text-frame-foreground/55">No preview</p>
         <p v-if="unsupported" class="text-[9px] leading-tight text-frame-foreground/40">
-          {{ entry.ext.slice(1).toUpperCase() }} isn't supported by this browser
+          {{ entry.ext.slice(1).toUpperCase() }} can't be previewed
         </p>
       </div>
     </div>

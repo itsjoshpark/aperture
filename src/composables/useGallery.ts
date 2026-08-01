@@ -1,6 +1,7 @@
 import { computed, ref, shallowRef, watch } from "vue";
 import type { FileSystemPort, ImageEntry } from "@/lib/fs/types";
 import { moveSelection, type MoveDirection } from "@/lib/grid-geometry";
+import { createPreviewSource } from "@/lib/preview/renderer";
 import { findLeftoverTempNames } from "@/lib/rename-engine";
 import { DEFAULT_SORT, sortEntries, type SortOrder } from "@/lib/sort";
 import { ThumbnailCache } from "@/lib/thumbnails";
@@ -70,7 +71,8 @@ export function useGallery() {
 
   watch(tileSize, storeTileSize);
 
-  const thumbnails = new ThumbnailCache();
+  const previews = createPreviewSource();
+  const thumbnails = new ThumbnailCache({ render: previews.render });
 
   /** Grid order. Rename mode overrides this with its own draft order. */
   const sorted = computed(() => sortEntries(entries.value, sort.value));
@@ -96,6 +98,10 @@ export function useGallery() {
 
   function close(): void {
     thumbnails.clear();
+    // A HEIC worker's wasm heap stays as large as the biggest photo it has
+    // decoded, so the pool goes away with the folder rather than idling at a
+    // couple of hundred megabytes.
+    previews.dispose();
     port.value = null;
     entries.value = [];
     selectedName.value = null;

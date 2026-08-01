@@ -24,6 +24,14 @@ export default defineConfig({
   },
   plugins: lazyPlugins(() => [vue(), tailwindcss()]),
 
+  // `heic-decode` carries libheif: 1.5 MB of CommonJS with a megabyte of wasm
+  // inlined as base64. Left to be transformed on demand, the first HEIC after a
+  // cold `pnpm dev` blocks for over a minute. Pre-bundling moves that to server
+  // startup, where esbuild does it once in a moment.
+  optimizeDeps: {
+    include: ["heic-decode"],
+  },
+
   // Two test projects, no DOM shim. Pure logic runs in node; anything depending on
   // real layout (grid geometry, IntersectionObserver, scrollIntoView) runs in a real
   // Chromium, which CI already installs for Playwright.

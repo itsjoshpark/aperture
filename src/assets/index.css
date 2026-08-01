@@ -142,3 +142,48 @@
     scroll-behavior: auto !important;
   }
 }
+
+@layer components {
+  /*
+   * The wait while a HEIC is decoded.
+   *
+   * Chrome will not draw HEIC at all, so Aperture decodes it in a worker —
+   * roughly 600ms for a photo off an iPhone, longer behind a queue — and a frame
+   * that sits empty that long is indistinguishable from the app being broken.
+   *
+   * The sweep is a pseudo-element over a flat tint rather than an animated
+   * background on the element itself, so that when the reduced-motion override
+   * above collapses the animation to a single frame there is still something to
+   * see. Tinted from `currentColor`, because this appears over a light tile well
+   * and over the dark large view.
+   */
+  .preview-shimmer {
+    position: relative;
+    overflow: hidden;
+    background-color: color-mix(in oklch, currentColor 8%, transparent);
+  }
+
+  .preview-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in oklch, currentColor 12%, transparent) 50%,
+      transparent 80%
+    );
+    background-repeat: no-repeat;
+    background-size: 220% 100%;
+    animation: preview-shimmer 1.4s linear infinite;
+  }
+
+  @keyframes preview-shimmer {
+    from {
+      background-position: 150% 0;
+    }
+    to {
+      background-position: -50% 0;
+    }
+  }
+}

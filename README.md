@@ -40,9 +40,14 @@ browser's File System Access API, so your photos never leave your machine.
 Chrome, Edge, Arc, or another Chromium browser. The File System Access API is not implemented in
 Safari or Firefox, and Aperture cannot work without it.
 
-**HEIC, HEIF and TIFF files appear but cannot be previewed** — no browser ships a decoder for them,
-so their tiles say "No preview" instead. Sorting, renaming and deleting them all work normally; only
-the picture is missing. If you want thumbnails for an iPhone camera roll, convert to JPEG first.
+**HEIC and HEIF previews are decoded by Aperture itself.** No browser ships a HEIC decoder — the
+format is covered by patent pools none of them license — and an iPhone camera roll is mostly HEIC, so
+Aperture runs libheif in a background worker instead. Those tiles shimmer for a moment and then fill
+in. The first one in a session also waits on a one-off download of the decoder. Nothing about the
+files changes; this is only how they get on screen.
+
+**TIFF files appear but cannot be previewed**, and their tiles say "No preview" instead. Sorting,
+renaming and deleting them all work normally; only the picture is missing.
 
 ## Development
 

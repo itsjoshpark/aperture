@@ -10,8 +10,12 @@ const aperture = useAperture();
 const { gallery } = aperture;
 
 const url = ref<string | null>(null);
+const loaded = ref(false);
 const failed = ref(false);
-let held: string | null = null;
+const pending = ref(false);
+/** See `ImageTile` — the name with an outstanding `acquire()`. Arrowing through
+ *  a folder can move the selection several times inside one HEIC decode. */
+let requested: string | null = null;
 
 const entry = computed(() => aperture.selectedEntry.value);
 const position = computed(
@@ -20,10 +24,13 @@ const position = computed(
 
 const unsupported = computed(() => !!entry.value && !isPreviewable(entry.value.name));
 const noPreview = computed(() => unsupported.value || failed.value);
+const decoding = computed(() => pending.value && !noPreview.value);
 
 /**
- * The large view holds exactly one full-size image at a time, acquired through
- * the same cache as the thumbnails so the two never decode the same file twice.
+ * The large view holds exactly one image at a time, acquired through the same
+ * cache as the thumbnails so the two never decode the same file twice — which
+ * for HEIC is the difference between opening instantly and waiting for libheif
+ * all over again.
  */
 watch(
   entry,
@@ -32,29 +39,44 @@ watch(
       release();
       return;
     }
-    if (held === next.name) return;
+    const name = next.name;
+    if (requested === name) return;
 
     release();
-    if (!isPreviewable(next.name)) return;
+    if (!isPreviewable(name)) return;
 
-    const name = next.name;
-    const acquired = await gallery.thumbnails.acquire(next);
-    if (entry.value?.name !== name) {
+    requested = name;
+    pending.value = true;
+
+    let acquired: string;
+    try {
+      acquired = await gallery.thumbnails.acquire(next);
+    } catch {
+      if (requested !== name) return;
+      pending.value = false;
+      failed.value = true;
+      return;
+    }
+
+    if (requested !== name) {
       gallery.thumbnails.release(name);
       return;
     }
-    held = name;
+    pending.value = false;
     url.value = acquired;
   },
   { immediate: true },
 );
 
 function release(): void {
-  failed.value = false;
-  if (!held) return;
-  gallery.thumbnails.release(held);
-  held = null;
   url.value = null;
+  loaded.value = false;
+  failed.value = false;
+  pending.value = false;
+
+  if (requested === null) return;
+  gallery.thumbnails.release(requested);
+  requested = null;
 }
 
 onBeforeUnmount(release);
@@ -108,16 +130,28 @@ onBeforeUnmount(release);
         :src="url"
         :alt="entry?.name"
         draggable="false"
-        class="max-h-full max-w-full object-contain"
+        :class="[
+          'max-h-full max-w-full object-contain transition-opacity duration-(--motion-fast)',
+          loaded ? 'opacity-100' : 'opacity-0',
+        ]"
+        @load="loaded = true"
         @error="failed = true"
+      />
+
+      <!-- Decoding a HEIC. Sized to the frame rather than the photo, whose
+           dimensions are exactly what we do not know yet. -->
+      <div
+        v-else-if="decoding"
+        class="preview-shimmer size-full max-h-full max-w-3xl rounded-sm text-white"
+        aria-hidden="true"
       />
 
       <div v-else-if="noPreview" class="flex flex-col items-center gap-3 text-center text-white/60">
         <ImageOff class="size-10" aria-hidden="true" />
         <p class="text-sm font-medium text-white/80">No preview available</p>
         <p v-if="unsupported" class="max-w-xs text-xs">
-          This browser has no {{ entry?.ext.slice(1).toUpperCase() }} decoder. The file is fine —
-          you can still sort, rename and delete it here.
+          Nothing in the browser can draw {{ entry?.ext.slice(1).toUpperCase() }}. The file is fine
+          — you can still sort, rename and delete it here.
         </p>
       </div>
 
