@@ -134,6 +134,9 @@ export function createAperture(options: ApertureOptions = {}) {
       await wait(motion.duration(REMOVE_DURATION));
       await gallery.remove(entry.name, displayed.value);
       if (rename.active.value) rename.forget(entry.name);
+
+      // Deleting the last image leaves the large view with nothing to show.
+      if (displayed.value.length === 0) gallery.view.value = "grid";
     } catch (cause) {
       gallery.error.value =
         cause instanceof Error ? cause.message : `Could not delete ${entry.name}.`;

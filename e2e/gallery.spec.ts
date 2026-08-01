@@ -141,6 +141,19 @@ test.describe("delete", () => {
     expect(await diskNames(page)).toEqual(["a.jpg", "b.jpg"]);
   });
 
+  test("returns to the grid when the last image goes", async ({ page }) => {
+    await openGallery(page, ["only.jpg"]);
+
+    await page.keyboard.press(" ");
+    await expect(page.getByRole("listbox", { name: "Images in this folder" })).toBeVisible();
+
+    await page.keyboard.press("Delete");
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+
+    await expect(page.getByRole("listbox", { name: "Images in this folder" })).toBeHidden();
+    await expect(page.getByText("No images in this folder.")).toBeVisible();
+  });
+
   test("moves the selection to the next image", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
