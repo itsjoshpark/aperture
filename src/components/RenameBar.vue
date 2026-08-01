@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { AlertTriangle, Check, Info, Undo2 } from "lucide-vue-next";
-import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useAperture } from "@/composables/useAperture";
+import { AlertTriangle, Check, Info, Undo2 } from "lucide-vue-next";
+import { computed } from "vue";
 
 const aperture = useAperture();
 const { rename } = aperture;
@@ -64,7 +64,7 @@ const canApply = computed(
             id="rename-prefix"
             v-model="rename.options.value.prefix"
             class="h-8 w-40"
-            placeholder="Hawaii-"
+            placeholder=""
             autocomplete="off"
             spellcheck="false"
           />
@@ -76,7 +76,7 @@ const canApply = computed(
             id="rename-suffix"
             v-model="rename.options.value.suffix"
             class="h-8 w-40"
-            placeholder="-raw"
+            placeholder=""
             autocomplete="off"
             spellcheck="false"
           />
