@@ -123,6 +123,10 @@ onBeforeUnmount(release);
         <ChevronLeft class="size-6" />
       </Button>
 
+      <!-- The image is held back until it has decoded, so a half-drawn frame
+           never shows — but with no transition on that: arrowing through a
+           folder should read as one photo replacing another, not as each one
+           dissolving into place. -->
       <img
         v-if="url && !failed"
         :key="entry?.name"
@@ -130,10 +134,7 @@ onBeforeUnmount(release);
         :src="url"
         :alt="entry?.name"
         draggable="false"
-        :class="[
-          'max-h-full max-w-full object-contain transition-opacity duration-(--motion-fast)',
-          loaded ? 'opacity-100' : 'opacity-0',
-        ]"
+        :class="['max-h-full max-w-full object-contain', loaded ? 'opacity-100' : 'opacity-0']"
         @load="loaded = true"
         @error="failed = true"
       />

@@ -48,6 +48,7 @@ const metrics = (): GridMetrics => {
 
 const drag = useTileDrag({
   scroller: () => scroller.value,
+  contentHeight: () => grid.value?.offsetHeight ?? 0,
   count: () => aperture.displayed.value.length,
   metrics,
   gridOrigin: () => {

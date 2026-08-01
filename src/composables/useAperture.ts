@@ -26,8 +26,6 @@ export function createAperture(options: ApertureOptions = {}) {
   const guard = useUnsavedGuard(rename.dirty);
   const motion = useReducedMotion();
 
-  /** A folder we have a handle for but not yet permission to read. */
-  const lastFolderName = ref<string | null>(null);
   const busy = ref(false);
 
   /**
@@ -53,33 +51,10 @@ export function createAperture(options: ApertureOptions = {}) {
   const selectedIndex = computed(() => gallery.selectedIndexIn(displayed.value));
   const selectedEntry = computed(() => displayed.value[selectedIndex.value] ?? null);
 
-  async function restoreLastFolder(): Promise<void> {
-    if (!supported) return;
-    lastFolderName.value = await source.lastName();
-  }
-
   async function openFolder(): Promise<void> {
     await guard.attempt(async () => {
       await adopt(await source.open());
     });
-  }
-
-  /**
-   * Reopening needs a click of its own: permission does not survive closing
-   * every tab of the origin, and `requestPermission` only works inside a gesture.
-   */
-  async function reopenLastFolder(): Promise<void> {
-    const port = await source.reopen();
-    if (!port) {
-      lastFolderName.value = await source.lastName();
-      return;
-    }
-    await adopt(port);
-  }
-
-  async function forgetLastFolder(): Promise<void> {
-    await source.forget();
-    lastFolderName.value = null;
   }
 
   async function adopt(port: FileSystemPort | null): Promise<void> {
@@ -87,7 +62,6 @@ export function createAperture(options: ApertureOptions = {}) {
     rename.cancel();
     rename.clearUndo();
     await gallery.open(port);
-    lastFolderName.value = port.label;
   }
 
   function closeFolder(): void {
@@ -179,12 +153,8 @@ export function createAperture(options: ApertureOptions = {}) {
     pendingDelete,
     deleteDialogOpen,
     busy,
-    lastFolderName,
     hasFolder: computed(() => gallery.port.value !== null),
-    restoreLastFolder,
     openFolder,
-    reopenLastFolder,
-    forgetLastFolder,
     closeFolder,
     moveSelectionBy,
     openLargeView,
