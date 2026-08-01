@@ -119,7 +119,13 @@ const canApply = computed(
           {{ rename.applying.value ? "Undoing…" : "Undo rename" }}
         </Button>
 
-        <Button v-else size="sm" :disabled="!canApply" @click="aperture.applyRename()">
+        <Button
+          v-else
+          variant="primary"
+          size="sm"
+          :disabled="!canApply"
+          @click="aperture.applyRename()"
+        >
           {{
             rename.applying.value
               ? "Renaming…"

@@ -55,7 +55,7 @@ async function renameThenProceed(): Promise<void> {
             as-child
             :disabled="!rename.plan.value.valid || rename.plan.value.changes.length === 0"
           >
-            <Button @click="renameThenProceed()">Rename now</Button>
+            <Button variant="primary" @click="renameThenProceed()">Rename now</Button>
           </AlertDialogAction>
         </div>
       </AlertDialogFooter>

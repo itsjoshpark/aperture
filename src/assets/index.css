@@ -63,6 +63,19 @@
   --control-destructive-top: oklch(0.62 0.22 27.3);
   --control-destructive-bottom: oklch(0.51 0.2 27.3);
 
+  /*
+   * The commit face: the button that actually writes to disk. Blue at hue 250,
+   * the same family as `--ring`, because it is the only colour in an otherwise
+   * fully desaturated palette and a second one would read as a new meaning.
+   *
+   * Unlike the neutral face this does not flip with the theme — it is legible on
+   * both chromes as it is, and a commit button that changed colour between them
+   * would be harder to learn, not easier. (Not to be confused with the
+   * `--primary` token, which is what the *neutral* face is derived from.)
+   */
+  --control-primary-top: oklch(0.6 0.17 252);
+  --control-primary-bottom: oklch(0.49 0.17 256);
+
   /* The menu panel is the same material as the trigger that opened it, so its
    * dividers cannot use `--border`, which is tuned to the chrome behind it. */
   --control-divider: oklch(0 0 0 / 0.12);
@@ -238,6 +251,14 @@
     background-image: linear-gradient(to bottom, var(--control-bottom), var(--control-top));
     box-shadow: var(--control-press);
     translate: 0 1px;
+  }
+
+  .control-face-primary {
+    --control-top: var(--control-primary-top);
+    --control-bottom: var(--control-primary-bottom);
+    --control-foreground: oklch(0.99 0 0);
+    --control-inner-lit: oklch(1 0 0 / 0.28);
+    --control-inner-dark: oklch(0 0 0 / 0.45);
   }
 
   .control-face-destructive {

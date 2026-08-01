@@ -19,6 +19,12 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default: "control-face",
+        /*
+         * Aperture change: the blue commit face, for the one button on a
+         * surface that actually writes to disk. Not the same idea as shadcn's
+         * `default` — this marks consequence, not visual weight.
+         */
+        primary: "control-face control-face-primary",
         destructive: "control-face control-face-destructive",
         /*
          * Aperture change: the documented way out of the system. The large
