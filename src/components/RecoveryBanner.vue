@@ -7,9 +7,13 @@ const aperture = useAperture();
 
 /**
  * A rename that dies partway — the tab closes, the machine sleeps and the
- * handle goes stale — can leave files parked under their temporary names. They
- * are intact, just invisible in Finder behind a leading dot, so say so plainly
- * rather than letting someone conclude their photos are gone.
+ * handle goes stale — can leave files parked under their temporary names.
+ *
+ * They cannot be restored automatically: a temp name records a file's position
+ * in the interrupted run, not what it used to be called, and the record that
+ * would say is in memory that died with the run. What we *can* do is make sure
+ * nobody concludes their photos are gone. The files are intact and still listed
+ * in the gallery, just hidden from Finder behind a leading dot.
  */
 const count = computed(() => aperture.gallery.leftoverTempNames.value.length);
 </script>
@@ -25,9 +29,11 @@ const count = computed(() => aperture.gallery.leftoverTempNames.value.length);
       <strong class="text-foreground">
         {{ count }} file{{ count === 1 ? "" : "s" }} left over from an interrupted rename.
       </strong>
-      They are safe, but hidden: look for names starting with
-      <code class="rounded-xs bg-muted px-1 py-0.5">.aperture-tmp-</code> in
-      <em>{{ aperture.gallery.label.value }}</em> and rename them back by hand.
+      Nothing was lost — they are in the gallery below under names starting with
+      <code class="rounded-xs bg-muted px-1 py-0.5">.aperture-tmp-</code>, which is why Finder hides
+      them. Drag them where you want and rename, or fix them by hand in
+      <em>{{ aperture.gallery.label.value }}</em
+      >.
     </p>
   </div>
 </template>

@@ -284,3 +284,12 @@ test.describe("rename", () => {
     expect((await diskNames(page)).filter((name) => name.startsWith(".aperture-tmp-"))).toEqual([]);
   });
 });
+
+test("explains files left behind by an interrupted rename", async ({ page }) => {
+  // A run that died between its two passes leaves files under temp names. They
+  // cannot be restored automatically, so the app has to at least account for them.
+  await openGallery(page, ["a.jpg", ".aperture-tmp-x7f2-0.jpg", ".aperture-tmp-x7f2-1.jpg"]);
+
+  await expect(page.getByRole("alert")).toContainText("2 files left over");
+  await expect(page.getByRole("alert")).toContainText("Nothing was lost");
+});
