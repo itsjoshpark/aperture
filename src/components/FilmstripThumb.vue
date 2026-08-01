@@ -10,10 +10,15 @@ const props = defineProps<{ entry: ImageEntry; cache: ThumbnailCache }>();
 
 const root = shallowRef<HTMLElement | null>(null);
 const url = ref<string | null>(null);
+const loaded = ref(false);
 const failed = ref(false);
-let held: string | null = null;
+const pending = ref(false);
+/** See `ImageTile` — the name with an outstanding `acquire()`, which a slow
+ *  HEIC decode gives plenty of time to go stale. */
+let requested: string | null = null;
 
 const noPreview = computed(() => !isPreviewable(props.entry.name) || failed.value);
+const decoding = computed(() => pending.value && !noPreview.value);
 
 // Same acquire/release discipline as the grid tiles: a filmstrip for a large
 // folder is just as many images, only smaller.
@@ -27,34 +32,49 @@ useIntersectionObserver(
 );
 
 async function acquire(): Promise<void> {
-  if (held === props.entry.name) return;
+  const name = props.entry.name;
+  if (requested === name) return;
   release();
 
-  // Nothing to decode for a format this browser has no decoder for.
-  if (!isPreviewable(props.entry.name)) return;
+  // Nothing to show for a format nothing can decode.
+  if (!isPreviewable(name)) return;
 
-  const name = props.entry.name;
-  const next = await props.cache.acquire(props.entry);
-  if (props.entry.name !== name) {
+  requested = name;
+  pending.value = true;
+
+  let next: string;
+  try {
+    next = await props.cache.acquire(props.entry);
+  } catch {
+    if (requested !== name) return;
+    pending.value = false;
+    failed.value = true;
+    return;
+  }
+
+  if (requested !== name) {
     props.cache.release(name);
     return;
   }
-  held = name;
+  pending.value = false;
   url.value = next;
 }
 
 function release(): void {
-  failed.value = false;
-  if (!held) return;
-  props.cache.release(held);
-  held = null;
   url.value = null;
+  loaded.value = false;
+  failed.value = false;
+  pending.value = false;
+
+  if (requested === null) return;
+  props.cache.release(requested);
+  requested = null;
 }
 
 watch(
   () => props.entry.name,
   () => {
-    if (held) acquire();
+    if (requested) acquire();
   },
 );
 
@@ -69,8 +89,20 @@ onBeforeUnmount(release);
       :alt="entry.name"
       draggable="false"
       decoding="async"
-      class="size-full object-cover"
+      :class="[
+        'size-full object-cover transition-opacity duration-(--motion-fast)',
+        loaded ? 'opacity-100' : 'opacity-0',
+      ]"
+      @load="loaded = true"
       @error="failed = true"
+    />
+
+    <!-- A HEIC being decoded. Tinted from `currentColor`, so it needs a colour
+         to work from against the dark strip. -->
+    <span
+      v-else-if="decoding"
+      class="preview-shimmer block size-full text-white"
+      aria-hidden="true"
     />
 
     <!-- At filmstrip size there is no room for words, only for "not a photo we

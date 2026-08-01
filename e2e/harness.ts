@@ -1,3 +1,4 @@
+import { HEIC_64, PNG_64 } from "@/lib/fs/fixtures";
 import { MemoryAdapter, type MemoryFile } from "@/lib/fs/memory-adapter";
 import type { FolderSource } from "@/lib/fs/folder-source";
 import type { FileSystemPort } from "@/lib/fs/types";
@@ -26,16 +27,15 @@ declare global {
 }
 
 /**
- * A real 64x64 PNG. Deliberately not a 1x1 pixel: a one-pixel image renders as
- * one pixel, which on screen is indistinguishable from an image that failed to
- * load — so tests against it can't tell the two apart.
+ * Real bytes matched to the extension, so a `.heic` in a spec is genuinely a
+ * HEIC — the whole point of that test is that Chrome cannot draw it and libheif
+ * has to.
  */
-const PIXEL = Uint8Array.from(
-  atob(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAe0lEQVR4nO3PUQkAIBTAwBfHEPZPYRhD+HEIgwW4zVn764YLGtCCBrSgAS1oQAsa0IIGtKABLWhACxrQgga0oAEtaEALGtCCBrSgAS1oQAsa0IIGtKABLWhACxrQgga0oAEtaEALGtCCBrSgAS1oQAsa0IIGtKABLWhACxrQwg8HFgABc6zLrQAAAABJRU5ErkJggg==",
-  ),
-  (character) => character.charCodeAt(0),
-);
+function contentFor(name: string): { bytes: Uint8Array; type: string } {
+  return /\.heic$|\.heif$/i.test(name)
+    ? { bytes: HEIC_64, type: "image/heic" }
+    : { bytes: PNG_64, type: "image/png" };
+}
 
 function seedFiles(): MemoryFile[] {
   const params = new URLSearchParams(window.location.search);
@@ -51,8 +51,7 @@ function seedFiles(): MemoryFile[] {
 
   return names.map((name, index) => ({
     name,
-    bytes: PIXEL,
-    type: "image/png",
+    ...contentFor(name),
     lastModified: 1_700_000_000_000 + index * 60_000,
   }));
 }

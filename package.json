@@ -17,6 +17,7 @@
     "@vueuse/core": "^14.4.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "heic-decode": "^2.1.0",
     "lucide-vue-next": "^1.0.0",
     "reka-ui": "^2.10.1",
     "tailwind-merge": "^3.4.0",

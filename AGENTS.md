@@ -35,13 +35,20 @@ src/
       types.ts         FileSystemPort — the seam everything else is written against
       fsa-adapter.ts   File System Access implementation
       memory-adapter.ts   in-memory fake (tests + harness only)
+      fixtures.ts         real PNG/HEIC bytes (tests + harness only)
       folder-source.ts    where folders come from; swapped by the harness
       handle-store.ts     IndexedDB, remembers the last folder
     naming.ts          PURE: filename planning + validation
     rename-engine.ts   executes a plan against a FileSystemPort
     sort.ts            natural-name + date comparators
     grid-geometry.ts   PURE: width/gap -> columns, index<->cell, pointer hit-test
-    thumbnails.ts      object-URL LRU cache
+    preview/           turning a file into something an <img> can show
+      renderer.ts        picks the path: plain object URL, or the HEIC decoder
+      heic-decoder.ts    worker pool + queue in front of libheif
+      heic-worker.ts     the only import of `heic-decode`; decode -> resize -> JPEG
+      protocol.ts        the worker message types, importable without libheif
+      preview-format.ts  size and quality of a decoded preview
+    thumbnails.ts      object-URL LRU cache, capped by count and by bytes
     file-names.ts      PURE: split base/extension, recognise images, flag undrawable ones
   composables/
     useAperture.ts     the store; provided at app level, injected everywhere
@@ -81,13 +88,35 @@ goes to a `.aperture-tmp-*` name first, then to its target. Do not "optimise" th
 **Permissions do not survive closing every tab of the origin.** Re-grant with `queryPermission()` /
 `requestPermission()` inside a user gesture.
 
-**Chrome cannot draw every format it will happily list.** There is no HEIC/HEIF decoder and no TIFF
-decoder for `<img>` — and HEIC is what an iPhone camera roll is made of. Those files stay in the
-gallery, because culling and renaming them is most of the point, but with `opacity` gated on `load`
-and no `error` handler they render as blank white frames forever, which is indistinguishable from
-the app being broken. `isPreviewable()` in `file-names.ts` is the list of formats to not even try;
-`ImageTile`, `LargeView` and `FilmstripThumb` each pair it with an `@error` fallback for corrupt
-files and formats nobody thought of. Any new surface that shows a photo needs both halves.
+**Chrome cannot draw every format it will happily list**, and a photo frame with nothing in it is
+indistinguishable from a broken app. Three separate mechanisms cover that, and **any new surface that
+shows a photo needs all three**:
+
+- `isPreviewable()` in `file-names.ts` — the denylist of formats not worth attempting. `.tif`/`.tiff`
+  only; render the "No preview" fallback instead of an `<img>`.
+- An `@error` handler on the `<img>` — for corrupt files and formats nobody thought of. The denylist
+  is a denylist, so anything unrecognised is attempted and lands here.
+- A `try`/`catch` around `cache.acquire()` and a pending state. `acquire()` rejects on a HEIC libheif
+  will not read, and an unhandled rejection leaves the frame blank forever — the exact failure the
+  other two exist to prevent.
+
+**HEIC is decoded by us, not by Chrome.** No browser licenses HEVC, and an iPhone camera roll is
+mostly HEIC, so `lib/preview/` runs libheif in a worker pool: decode, downscale to 2048px, re-encode
+as JPEG. It costs ~600ms of CPU and 46 MB of transient RGBA per 12 MP photo, which is why it is
+queued, cancellable and off the main thread — and why the tile shimmers while it waits. `heic-decode`
+is imported from `heic-worker.ts` and nowhere else; importing it anywhere on the main thread puts a
+megabyte of wasm in the entry chunk.
+
+**`heic-decode` must stay in `optimizeDeps.include`.** It is 1.5 MB of CommonJS with the wasm inlined
+as base64. Without pre-bundling, Vite transforms it on first request instead of at startup, and the
+first HEIC after a cold `pnpm dev` blocks for over a minute — 84ms with it. Production builds are
+unaffected either way; this is purely a dev-server trap.
+
+**`ThumbnailCache` is capped twice.** A pass-through object URL is a handle onto a file and costs no
+memory; a decoded HEIC preview is a JPEG we are actually holding. Renderers report `bytes` so the
+byte budget can evict the second kind without punishing the first. Callers must pair every
+`acquire()` with exactly one `release()` — including when it rejects, and including when they give up
+before it settles, which is what cancels a decode nobody is waiting for any more.
 
 **The size slider must not keep focus.** Reka focuses the thumb on pointerdown, as it must to be
 draggable; if it still holds focus on pointerup the arrow keys stay pointed at the slider and there
@@ -95,9 +124,10 @@ is no way back to the gallery but the mouse. `SizeSlider` blurs on `pointerup` o
 keydown — so Tab-ing to it still works. `useKeyboard` correspondingly ignores keys aimed at
 `role="slider"`, or one arrow press would resize _and_ move the selection.
 
-**`memory-adapter.ts` must never be reachable from `src/main.ts`.** It is the in-memory fake for
-tests and the e2e harness, which has its own HTML entry; keeping it out of the production entry
-graph is what keeps it out of the bundle. `grep MemoryAdapter dist/assets/*.js` should find nothing.
+**`memory-adapter.ts` and `fixtures.ts` must never be reachable from `src/main.ts`.** They are the
+in-memory fake and its image bytes for tests and the e2e harness, which has its own HTML entry;
+keeping them out of the production entry graph is what keeps them out of the bundle.
+`grep MemoryAdapter dist/assets/*.js` should find nothing.
 
 **Assets must go through Vite.** `base` is `/aperture/`, so a hardcoded leading-slash URL will 404
 in production.
