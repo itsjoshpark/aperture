@@ -60,9 +60,6 @@ const adapter = new MemoryAdapter(seedFiles(), { label: "Test Folder" });
 
 const source: FolderSource = {
   open: async (): Promise<FileSystemPort | null> => adapter,
-  lastName: async () => null,
-  reopen: async () => null,
-  forget: async () => {},
 };
 
 window.__aperture = {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, shallowRef } from "vue";
+import { shallowRef } from "vue";
 import AppToolbar from "@/components/AppToolbar.vue";
 import DeleteDialog from "@/components/DeleteDialog.vue";
 import DiscardChangesDialog from "@/components/DiscardChangesDialog.vue";
@@ -23,8 +23,6 @@ const largeView = useLargeViewTransition(aperture.motion, () => {
   const name = aperture.gallery.selectedName.value;
   return name ? (grid.value?.getTileRect(name) ?? null) : null;
 });
-
-onMounted(() => aperture.restoreLastFolder());
 </script>
 
 <template>

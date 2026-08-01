@@ -37,7 +37,6 @@ src/
       memory-adapter.ts   in-memory fake (tests + harness only)
       fixtures.ts         real PNG/HEIC bytes (tests + harness only)
       folder-source.ts    where folders come from; swapped by the harness
-      handle-store.ts     IndexedDB, remembers the last folder
     naming.ts          PURE: filename planning + validation
     rename-engine.ts   executes a plan against a FileSystemPort
     sort.ts            natural-name + date comparators
@@ -85,8 +84,12 @@ never imply otherwise.
 currently held by another file in the set (`b.jpg → 1.jpg` while `1.jpg` still exists). Every file
 goes to a `.aperture-tmp-*` name first, then to its target. Do not "optimise" this away.
 
-**Permissions do not survive closing every tab of the origin.** Re-grant with `queryPermission()` /
-`requestPermission()` inside a user gesture.
+**Nothing is remembered between sessions, deliberately.** A directory handle survives a reload but
+its permission does not — it dies with the last tab of the origin, and `requestPermission()` only
+works inside a user gesture. Restoring a folder therefore still costs a click and a prompt, which is
+not enough better than picking it again to justify keeping handles in IndexedDB. Every session
+starts at the picker. `FileSystemPort.ensurePermission()` still exists for adapters that need it,
+but nothing in the app calls it: `showDirectoryPicker()` is asked for `readwrite` up front.
 
 **Chrome cannot draw every format it will happily list**, and a photo frame with nothing in it is
 indistinguishable from a broken app. Three separate mechanisms cover that, and **any new surface that
@@ -142,6 +145,20 @@ therefore track _whether they are open_ separately from _what they are about_
 draft is holding `ImageEntry` objects whose names no longer exist, so `apply()` re-materialises it
 against the refreshed listing. Anything that keeps the session alive across a disk change has to do
 the same.
+
+**A dragged tile never leaves its cell.** `ImageTile`'s root is the grid cell and stays put — it is
+the dashed drop placeholder — while a card _inside_ it carries the transform that follows the
+cursor. `useTileDrag` measures the root to work out that offset, so moving the transform back onto
+the root reintroduces the problem the old code needed a correction term for, and leaves no cell to
+draw the placeholder in. The root also gets `transition: none` while dragging, or `TransitionGroup`
+FLIPs the placeholder to its new cell over 260ms and the card drifts under the cursor for the whole
+animation.
+
+**Auto-scroll must not read `scrollHeight`.** A transformed box still counts towards its scroller's
+scrollable overflow, so the lifted card inflates `scrollHeight` by however far it has been dragged —
+and scrolling towards it creates more of it, a loop that runs off the end of the last row into blank
+space. `useTileDrag` clamps to `contentHeight()`, the grid's laid-out height, which no transform can
+change. `gallery.spec.ts` holds a drag at the bottom edge to prove it.
 
 **`columnCount()` reimplements a browser decision** — how many tracks `auto-fill` produces — and
 arrow keys and drag hit-testing both trust it. `grid-geometry.browser.test.ts` checks it against
