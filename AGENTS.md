@@ -42,7 +42,7 @@ src/
     sort.ts            natural-name + date comparators
     grid-geometry.ts   PURE: width/gap -> columns, index<->cell, pointer hit-test
     thumbnails.ts      object-URL LRU cache
-    file-names.ts      PURE: split base/extension, recognise images
+    file-names.ts      PURE: split base/extension, recognise images, flag undrawable ones
   composables/
     useAperture.ts     the store; provided at app level, injected everywhere
     useGallery.ts      entries, sort, selection, delete
@@ -81,6 +81,20 @@ goes to a `.aperture-tmp-*` name first, then to its target. Do not "optimise" th
 **Permissions do not survive closing every tab of the origin.** Re-grant with `queryPermission()` /
 `requestPermission()` inside a user gesture.
 
+**Chrome cannot draw every format it will happily list.** There is no HEIC/HEIF decoder and no TIFF
+decoder for `<img>` — and HEIC is what an iPhone camera roll is made of. Those files stay in the
+gallery, because culling and renaming them is most of the point, but with `opacity` gated on `load`
+and no `error` handler they render as blank white frames forever, which is indistinguishable from
+the app being broken. `isPreviewable()` in `file-names.ts` is the list of formats to not even try;
+`ImageTile`, `LargeView` and `FilmstripThumb` each pair it with an `@error` fallback for corrupt
+files and formats nobody thought of. Any new surface that shows a photo needs both halves.
+
+**The size slider must not keep focus.** Reka focuses the thumb on pointerdown, as it must to be
+draggable; if it still holds focus on pointerup the arrow keys stay pointed at the slider and there
+is no way back to the gallery but the mouse. `SizeSlider` blurs on `pointerup` only — never on
+keydown — so Tab-ing to it still works. `useKeyboard` correspondingly ignores keys aimed at
+`role="slider"`, or one arrow press would resize _and_ move the selection.
+
 **`memory-adapter.ts` must never be reachable from `src/main.ts`.** It is the in-memory fake for
 tests and the e2e harness, which has its own HTML entry; keeping it out of the production entry
 graph is what keeps it out of the bundle. `grep MemoryAdapter dist/assets/*.js` should find nothing.
@@ -114,10 +128,12 @@ would assert nothing. Two Vitest projects instead:
 - **`unit`** (`*.test.ts`, node, no DOM): everything in `src/lib/` that is pure or takes a
   `FileSystemPort` argument. This is where the rename engine is covered, against `MemoryAdapter`.
 - **`browser`** (`*.browser.test.ts`, real Chromium via Playwright): components whose behaviour
-  depends on real layout.
+  depends on real layout, and anything reaching for a browser API node does not have —
+  `useGallery.browser.test.ts` is there because `localStorage` is, and a hand-written stub would
+  only prove the stub works.
 
-Put a new test in `unit` unless it genuinely needs layout. If you find yourself mocking
-`getBoundingClientRect`, it belongs in `browser`.
+Put a new test in `unit` unless it genuinely needs layout or a real browser API. If you find
+yourself mocking `getBoundingClientRect`, it belongs in `browser`.
 
 On top of those, `pnpm e2e` drives the whole app in Chromium through `e2e/harness.html`.
 

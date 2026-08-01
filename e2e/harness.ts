@@ -25,9 +25,15 @@ declare global {
   }
 }
 
-/** A 1x1 GIF, enough for the browser to decode and lay out. */
+/**
+ * A real 64x64 PNG. Deliberately not a 1x1 pixel: a one-pixel image renders as
+ * one pixel, which on screen is indistinguishable from an image that failed to
+ * load — so tests against it can't tell the two apart.
+ */
 const PIXEL = Uint8Array.from(
-  atob("R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="),
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAe0lEQVR4nO3PUQkAIBTAwBfHEPZPYRhD+HEIgwW4zVn764YLGtCCBrSgAS1oQAsa0IIGtKABLWhACxrQgga0oAEtaEALGtCCBrSgAS1oQAsa0IIGtKABLWhACxrQgga0oAEtaEALGtCCBrSgAS1oQAsa0IIGtKABLWhACxrQwg8HFgABc6zLrQAAAABJRU5ErkJggg==",
+  ),
   (character) => character.charCodeAt(0),
 );
 
@@ -46,7 +52,7 @@ function seedFiles(): MemoryFile[] {
   return names.map((name, index) => ({
     name,
     bytes: PIXEL,
-    type: "image/gif",
+    type: "image/png",
     lastModified: 1_700_000_000_000 + index * 60_000,
   }));
 }

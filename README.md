@@ -40,6 +40,10 @@ browser's File System Access API, so your photos never leave your machine.
 Chrome, Edge, Arc, or another Chromium browser. The File System Access API is not implemented in
 Safari or Firefox, and Aperture cannot work without it.
 
+**HEIC, HEIF and TIFF files appear but cannot be previewed** — no browser ships a decoder for them,
+so their tiles say "No preview" instead. Sorting, renaming and deleting them all work normally; only
+the picture is missing. If you want thumbnails for an iPhone camera roll, convert to JPEG first.
+
 ## Development
 
 ```bash

@@ -13,8 +13,8 @@ import type { Aperture } from "./useAperture";
 export function useKeyboard(aperture: Aperture) {
   useEventListener(window, "keydown", (event: KeyboardEvent) => {
     if (!aperture.hasFolder.value) return;
-    // Never steal keys from a text field or an open dialog.
-    if (isTyping(event.target) || aperture.deleteDialogOpen.value) return;
+    // Never steal keys from a control that has its own, or from an open dialog.
+    if (handlesItsOwnKeys(event.target) || aperture.deleteDialogOpen.value) return;
     if (aperture.rename.applying.value) return;
 
     const inLargeView = aperture.gallery.view.value === "large";
@@ -96,12 +96,18 @@ async function reorderSelected(aperture: Aperture, delta: number): Promise<void>
   if (to !== from) aperture.rename.move(from, to);
 }
 
-function isTyping(target: EventTarget | null): boolean {
+/**
+ * Text fields want their own arrows and their own Backspace; so does a focused
+ * slider, whose whole keyboard interface is the arrow keys. Without this the
+ * size slider would resize the tiles *and* move the selection on one press.
+ */
+function handlesItsOwnKeys(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return (
     target.isContentEditable ||
     target.tagName === "INPUT" ||
     target.tagName === "TEXTAREA" ||
-    target.tagName === "SELECT"
+    target.tagName === "SELECT" ||
+    target.getAttribute("role") === "slider"
   );
 }

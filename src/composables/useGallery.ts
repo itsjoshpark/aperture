@@ -1,4 +1,4 @@
-import { computed, ref, shallowRef } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import type { FileSystemPort, ImageEntry } from "@/lib/fs/types";
 import { moveSelection, type MoveDirection } from "@/lib/grid-geometry";
 import { findLeftoverTempNames } from "@/lib/rename-engine";
@@ -9,13 +9,47 @@ export const MIN_TILE_SIZE = 80;
 export const MAX_TILE_SIZE = 320;
 export const DEFAULT_TILE_SIZE = 160;
 
+/** Preview size is a preference about your eyes and your screen, not about a
+ *  particular folder, so it outlives both the folder and the tab. */
+const TILE_SIZE_KEY = "aperture:tile-size";
+
+/**
+ * A stored size is untrusted input: it may predate a change to the bounds, or
+ * have been edited by hand. Clamp rather than reject, so a value that is merely
+ * out of range still gets you close to what you asked for.
+ */
+export function clampTileSize(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_TILE_SIZE;
+  return Math.min(MAX_TILE_SIZE, Math.max(MIN_TILE_SIZE, Math.round(value)));
+}
+
+export function readStoredTileSize(): number {
+  // Touching localStorage throws outright when storage is disabled, and the
+  // preview size is not worth failing to boot over.
+  try {
+    const stored = globalThis.localStorage?.getItem(TILE_SIZE_KEY);
+    if (stored === null || stored === undefined || stored.trim() === "") return DEFAULT_TILE_SIZE;
+    return clampTileSize(Number(stored));
+  } catch {
+    return DEFAULT_TILE_SIZE;
+  }
+}
+
+function storeTileSize(value: number): void {
+  try {
+    globalThis.localStorage?.setItem(TILE_SIZE_KEY, String(value));
+  } catch {
+    // Private browsing, a full quota — the slider still works, it just forgets.
+  }
+}
+
 export type GalleryView = "grid" | "large";
 
 export function useGallery() {
   const port = shallowRef<FileSystemPort | null>(null);
   const entries = shallowRef<ImageEntry[]>([]);
   const sort = ref<SortOrder>({ ...DEFAULT_SORT });
-  const tileSize = ref(DEFAULT_TILE_SIZE);
+  const tileSize = ref(readStoredTileSize());
   const view = ref<GalleryView>("grid");
   const loading = ref(false);
   const error = ref<string | null>(null);
@@ -33,6 +67,8 @@ export function useGallery() {
    * out before the array changes and the survivors slide up.
    */
   const removingName = ref<string | null>(null);
+
+  watch(tileSize, storeTileSize);
 
   const thumbnails = new ThumbnailCache();
 

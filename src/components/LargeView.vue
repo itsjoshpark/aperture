@@ -1,20 +1,25 @@
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-vue-next";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { useAperture } from "@/composables/useAperture";
+import { isPreviewable } from "@/lib/file-names";
+import { ChevronLeft, ChevronRight, ImageOff, Trash2, X } from "lucide-vue-next";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import Filmstrip from "./Filmstrip.vue";
 
 const aperture = useAperture();
 const { gallery } = aperture;
 
 const url = ref<string | null>(null);
+const failed = ref(false);
 let held: string | null = null;
 
 const entry = computed(() => aperture.selectedEntry.value);
 const position = computed(
   () => `${aperture.selectedIndex.value + 1} of ${aperture.displayed.value.length}`,
 );
+
+const unsupported = computed(() => !!entry.value && !isPreviewable(entry.value.name));
+const noPreview = computed(() => unsupported.value || failed.value);
 
 /**
  * The large view holds exactly one full-size image at a time, acquired through
@@ -30,6 +35,8 @@ watch(
     if (held === next.name) return;
 
     release();
+    if (!isPreviewable(next.name)) return;
+
     const name = next.name;
     const acquired = await gallery.thumbnails.acquire(next);
     if (entry.value?.name !== name) {
@@ -43,6 +50,7 @@ watch(
 );
 
 function release(): void {
+  failed.value = false;
   if (!held) return;
   gallery.thumbnails.release(held);
   held = null;
@@ -94,14 +102,24 @@ onBeforeUnmount(release);
       </Button>
 
       <img
-        v-if="url"
+        v-if="url && !failed"
         :key="entry?.name"
         data-large-image
         :src="url"
         :alt="entry?.name"
         draggable="false"
         class="max-h-full max-w-full object-contain"
+        @error="failed = true"
       />
+
+      <div v-else-if="noPreview" class="flex flex-col items-center gap-3 text-center text-white/60">
+        <ImageOff class="size-10" aria-hidden="true" />
+        <p class="text-sm font-medium text-white/80">No preview available</p>
+        <p v-if="unsupported" class="max-w-xs text-xs">
+          This browser has no {{ entry?.ext.slice(1).toUpperCase() }} decoder. The file is fine —
+          you can still sort, rename and delete it here.
+        </p>
+      </div>
 
       <Button
         variant="ghost"
