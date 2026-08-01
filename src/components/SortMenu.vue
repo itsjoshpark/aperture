@@ -36,7 +36,7 @@ function setDirection(direction: SortDirection): void {
 <template>
   <DropdownMenu>
     <DropdownMenuTrigger as-child>
-      <Button variant="ghost" size="sm" :disabled="rename.active.value" class="gap-1.5">
+      <Button size="sm" :disabled="rename.active.value" class="gap-1.5">
         <ArrowDownAZ v-if="gallery.sort.value.direction === 'asc'" class="size-4" />
         <ArrowUpAZ v-else class="size-4" />
         <span>{{ label }}</span>

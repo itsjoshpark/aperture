@@ -49,13 +49,13 @@ async function renameThenProceed(): Promise<void> {
         <AlertDialogCancel class="mt-0">Cancel</AlertDialogCancel>
         <div class="flex gap-2">
           <AlertDialogAction as-child>
-            <Button variant="outline" @click="guard.proceed()">Discard changes</Button>
+            <Button @click="guard.proceed()">Discard changes</Button>
           </AlertDialogAction>
           <AlertDialogAction
             as-child
             :disabled="!rename.plan.value.valid || rename.plan.value.changes.length === 0"
           >
-            <Button @click="renameThenProceed()">Rename now</Button>
+            <Button variant="primary" @click="renameThenProceed()">Rename now</Button>
           </AlertDialogAction>
         </div>
       </AlertDialogFooter>

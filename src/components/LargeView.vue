@@ -88,9 +88,8 @@ onBeforeUnmount(release);
   <div class="fixed inset-0 z-50 flex flex-col bg-[#2d2d2d]">
     <header class="flex shrink-0 items-center gap-3 px-3 py-2 text-white">
       <Button
-        variant="ghost"
+        variant="overlay"
         size="icon"
-        class="text-white hover:bg-white/10 hover:text-white"
         aria-label="Back to gallery"
         @click="aperture.closeLargeView()"
       >
@@ -101,9 +100,9 @@ onBeforeUnmount(release);
       <p class="shrink-0 text-xs text-white/60">{{ position }}</p>
 
       <Button
-        variant="ghost"
+        variant="overlay"
         size="icon"
-        class="text-white hover:bg-destructive/20 hover:text-white"
+        class="hover:bg-destructive/20"
         :aria-label="`Delete ${entry?.name}`"
         @click="aperture.askToDelete()"
       >
@@ -113,9 +112,9 @@ onBeforeUnmount(release);
 
     <div class="relative flex min-h-0 flex-1 items-center justify-center p-4">
       <Button
-        variant="ghost"
+        variant="overlay"
         size="icon"
-        class="absolute left-2 z-10 text-white hover:bg-white/10 hover:text-white"
+        class="absolute left-2 z-10"
         aria-label="Previous image"
         :disabled="aperture.selectedIndex.value <= 0"
         @click="aperture.moveSelectionBy('left')"
@@ -157,9 +156,9 @@ onBeforeUnmount(release);
       </div>
 
       <Button
-        variant="ghost"
+        variant="overlay"
         size="icon"
-        class="absolute right-2 z-10 text-white hover:bg-white/10 hover:text-white"
+        class="absolute right-2 z-10"
         aria-label="Next image"
         :disabled="aperture.selectedIndex.value >= aperture.displayed.value.length - 1"
         @click="aperture.moveSelectionBy('right')"

@@ -261,9 +261,8 @@ defineExpose({
           :aria-label="`Delete ${entry.name}`"
           :class="
             cn(
-              'shrink-0 rounded-xs p-0.5 text-frame-foreground/50 transition-colors',
-              'hover:bg-destructive/10 hover:text-destructive',
-              'focus-visible:ring-2 focus-visible:ring-destructive focus-visible:outline-none',
+              'control-face control-face-frame shrink-0 rounded-xs p-1',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive',
               'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
               selected && 'opacity-100',
             )
