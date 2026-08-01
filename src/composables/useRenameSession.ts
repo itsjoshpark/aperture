@@ -31,6 +31,13 @@ export function useRenameSession(gallery: Gallery) {
   const failure = ref<string | null>(null);
 
   /**
+   * Set once a rename has landed. The bar stays open in this state and its
+   * primary button becomes Undo, so the way back is exactly where the way
+   * forward was rather than somewhere you have to go looking for it.
+   */
+  const applied = ref(false);
+
+  /**
    * Every name in the folder, images or not. Held rather than read on demand so
    * the preview can flag a collision as you type — and it must include
    * non-images, since a target colliding with a spreadsheet is just as
@@ -58,7 +65,12 @@ export function useRenameSession(gallery: Gallery) {
    * is at risk.
    */
   const dirty = computed(
-    () => active.value && !applying.value && (reordered.value || affixesTouched.value),
+    () =>
+      active.value &&
+      !applying.value &&
+      // Once applied, the arrangement is on disk — there is nothing left to lose.
+      !applied.value &&
+      (reordered.value || affixesTouched.value),
   );
 
   const canUndo = computed(() => undoRecords.value !== null && !applying.value);
@@ -96,9 +108,10 @@ export function useRenameSession(gallery: Gallery) {
     initialNames.value = initialNames.value.filter((_, index) => index !== at);
   }
 
-  /** Leaves rename mode and discards the arrangement. */
+  /** Leaves rename mode. The undo record, if any, survives on the toolbar. */
   function cancel(): void {
     active.value = false;
+    applied.value = false;
     draft.value = [];
     initialNames.value = [];
     options.value = { ...DEFAULT_RENAME_OPTIONS };
@@ -106,19 +119,23 @@ export function useRenameSession(gallery: Gallery) {
     failure.value = null;
   }
 
-  /** Leaves rename mode but keeps the undo record, so Undo stays available. */
-  function finish(): void {
-    active.value = false;
-    draft.value = [];
-    initialNames.value = [];
-    progress.value = null;
-  }
-
   async function apply(): Promise<boolean> {
     const port = gallery.port.value;
     if (!port || !plan.value.valid || plan.value.changes.length === 0) return false;
 
-    return run(() => executeRename(port, plan.value.changes, { onProgress: onProgress }));
+    // Captured before the run, because the plan is rebuilt from the refreshed
+    // entries the moment their names change underneath it.
+    const targets = plan.value.steps.map((step) => step.to);
+
+    const ok = await run(() => executeRename(port, plan.value.changes, { onProgress }));
+    if (!ok) return false;
+
+    // Stay open, now showing the files under their new names in the order they
+    // were arranged into — the draft is holding entries that no longer exist.
+    draft.value = orderByName(gallery.entries.value, targets);
+    initialNames.value = targets;
+    applied.value = true;
+    return true;
   }
 
   async function undo(): Promise<boolean> {
@@ -126,11 +143,22 @@ export function useRenameSession(gallery: Gallery) {
     const records = undoRecords.value;
     if (!port || !records) return false;
 
-    const ok = await run(() =>
-      executeRename(port, buildUndoSteps(records), { onProgress: onProgress }),
-    );
-    if (ok) undoRecords.value = null;
-    return ok;
+    const ok = await run(() => executeRename(port, buildUndoSteps(records), { onProgress }));
+    if (!ok) return false;
+
+    undoRecords.value = null;
+    // The folder is back to how it started, so there is nothing left to arrange.
+    cancel();
+    return true;
+  }
+
+  /** Re-materialise a drag order against freshly listed entries. */
+  function orderByName(entries: ImageEntry[], names: string[]): ImageEntry[] {
+    const byName = new Map(entries.map((entry) => [entry.name, entry]));
+    return names.flatMap((name) => {
+      const entry = byName.get(name);
+      return entry ? [entry] : [];
+    });
   }
 
   function onProgress(next: RenameProgress) {
@@ -148,7 +176,6 @@ export function useRenameSession(gallery: Gallery) {
       gallery.thumbnails.clear();
       await gallery.refresh();
       undoRecords.value = records.length > 0 ? records : null;
-      finish();
       return true;
     } catch (cause) {
       failure.value = cause instanceof Error ? cause.message : "The rename failed.";
@@ -162,6 +189,7 @@ export function useRenameSession(gallery: Gallery) {
 
   return {
     active,
+    applied,
     options,
     draft,
     plan,
@@ -176,7 +204,6 @@ export function useRenameSession(gallery: Gallery) {
     setOrder,
     forget,
     cancel,
-    finish,
     apply,
     undo,
     clearUndo: () => {

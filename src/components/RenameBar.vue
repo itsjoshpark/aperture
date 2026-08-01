@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangle, Info, Undo2 } from "lucide-vue-next";
+import { AlertTriangle, Check, Info, Undo2 } from "lucide-vue-next";
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,68 +49,83 @@ const canApply = computed(
 <template>
   <div class="border-t bg-card/60 px-4 py-3 backdrop-blur">
     <div class="flex flex-wrap items-end gap-x-4 gap-y-3">
-      <div class="grid gap-1">
-        <Label for="rename-prefix" class="text-xs text-muted-foreground">Prefix</Label>
-        <Input
-          id="rename-prefix"
-          v-model="rename.options.value.prefix"
-          class="h-8 w-40"
-          placeholder="Hawaii-"
-          autocomplete="off"
-          spellcheck="false"
-        />
-      </div>
+      <!--
+        Once the rename has landed these describe what already happened, so they
+        go read-only rather than inviting edits that would do nothing.
+      -->
+      <div
+        class="flex flex-wrap items-end gap-4"
+        :inert="rename.applied.value || undefined"
+        :class="rename.applied.value && 'opacity-50'"
+      >
+        <div class="grid gap-1">
+          <Label for="rename-prefix" class="text-xs text-muted-foreground">Prefix</Label>
+          <Input
+            id="rename-prefix"
+            v-model="rename.options.value.prefix"
+            class="h-8 w-40"
+            placeholder="Hawaii-"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
 
-      <div class="grid gap-1">
-        <Label for="rename-suffix" class="text-xs text-muted-foreground">Suffix</Label>
-        <Input
-          id="rename-suffix"
-          v-model="rename.options.value.suffix"
-          class="h-8 w-40"
-          placeholder="-raw"
-          autocomplete="off"
-          spellcheck="false"
-        />
-      </div>
+        <div class="grid gap-1">
+          <Label for="rename-suffix" class="text-xs text-muted-foreground">Suffix</Label>
+          <Input
+            id="rename-suffix"
+            v-model="rename.options.value.suffix"
+            class="h-8 w-40"
+            placeholder="-raw"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
 
-      <div class="grid gap-1">
-        <Label for="rename-start" class="text-xs text-muted-foreground">Start at</Label>
-        <Input id="rename-start" v-model="startIndex" class="h-8 w-20" inputmode="numeric" />
-      </div>
+        <div class="grid gap-1">
+          <Label for="rename-start" class="text-xs text-muted-foreground">Start at</Label>
+          <Input id="rename-start" v-model="startIndex" class="h-8 w-20" inputmode="numeric" />
+        </div>
 
-      <div class="grid gap-1">
-        <Label for="rename-padding" class="text-xs text-muted-foreground">Digits</Label>
-        <Input
-          id="rename-padding"
-          v-model="padding"
-          class="h-8 w-20"
-          inputmode="numeric"
-          placeholder="Auto"
-        />
+        <div class="grid gap-1">
+          <Label for="rename-padding" class="text-xs text-muted-foreground">Digits</Label>
+          <Input
+            id="rename-padding"
+            v-model="padding"
+            class="h-8 w-20"
+            inputmode="numeric"
+            placeholder="Auto"
+          />
+        </div>
       </div>
 
       <div class="ml-auto flex items-center gap-2">
-        <Button
-          v-if="rename.canUndo.value && !rename.active.value"
-          variant="outline"
-          size="sm"
-          class="gap-1.5"
-          @click="aperture.undoRename()"
-        >
-          <Undo2 class="size-4" />
-          Undo rename
-        </Button>
-
         <Button
           variant="ghost"
           size="sm"
           :disabled="rename.applying.value"
           @click="aperture.exitRename()"
         >
-          Cancel
+          {{ rename.applied.value ? "Done" : "Cancel" }}
         </Button>
 
-        <Button size="sm" :disabled="!canApply" @click="aperture.applyRename()">
+        <!--
+          One button, two jobs. After a rename lands it becomes Undo in place,
+          so the way back is where the way forward was.
+        -->
+        <Button
+          v-if="rename.applied.value"
+          variant="outline"
+          size="sm"
+          class="gap-1.5"
+          :disabled="rename.applying.value"
+          @click="aperture.undoRename()"
+        >
+          <Undo2 class="size-4" />
+          {{ rename.applying.value ? "Undoing…" : "Undo rename" }}
+        </Button>
+
+        <Button v-else size="sm" :disabled="!canApply" @click="aperture.applyRename()">
           {{
             rename.applying.value
               ? "Renaming…"
@@ -120,7 +135,20 @@ const canApply = computed(
       </div>
     </div>
 
-    <p v-if="problem" class="mt-2 flex items-center gap-1.5 text-xs text-destructive" role="alert">
+    <p
+      v-if="rename.applied.value"
+      class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"
+      role="status"
+    >
+      <Check class="size-3.5 shrink-0" />
+      Renamed. Undo puts every original name back.
+    </p>
+
+    <p
+      v-else-if="problem"
+      class="mt-2 flex items-center gap-1.5 text-xs text-destructive"
+      role="alert"
+    >
       <AlertTriangle class="size-3.5 shrink-0" />
       {{ problem.message }}
     </p>

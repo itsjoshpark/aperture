@@ -191,11 +191,38 @@ test.describe("rename", () => {
       .poll(() => diskNames(page).then((names) => names.slice().sort()))
       .toEqual(["trip-1.jpg", "trip-2.jpg", "trip-3.jpg"]);
 
+    // The tiles now show the real names, not a preview of them.
+    await expect(page.getByRole("gridcell")).toHaveText([
+      /^trip-1\.jpg/,
+      /^trip-2\.jpg/,
+      /^trip-3\.jpg/,
+    ]);
+
+    // The Rename button has become Undo, in place.
+    await expect(page.getByRole("button", { name: /^Rename \d+ files?$/ })).toBeHidden();
     await page.getByRole("button", { name: "Undo rename" }).click();
 
     await expect
       .poll(() => diskNames(page).then((names) => names.slice().sort()))
       .toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+
+    // Undoing returns to the ordinary gallery, sorting restored.
+    await expect(page.getByRole("button", { name: /Name/ })).toBeVisible();
+  });
+
+  test("keeps the arrangement visible after renaming", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
+
+    await page.getByRole("button", { name: "Rename…" }).click();
+    await page.getByLabel("Prefix").fill("shot-");
+    await page.getByRole("button", { name: /^Rename \d+ files?$/ }).click();
+
+    await expect(page.getByText("Renamed.")).toBeVisible();
+
+    // Closing the bar afterwards must not prompt — the work is already on disk.
+    await page.getByRole("button", { name: "Done" }).click();
+    await expect(page.getByRole("alertdialog")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Rename…" })).toBeVisible();
   });
 
   test("reorders from the keyboard as well as the mouse", async ({ page }) => {
