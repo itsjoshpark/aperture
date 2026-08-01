@@ -1,0 +1,21 @@
+{
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "types": ["vite/client"],
+    "allowArbitraryExtensions": true,
+    // No `baseUrl` — TypeScript 6 removed it. Bare `paths` resolve relative to this file.
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  // The harness is browser code and shares the app's aliases; the specs are Node
+  // and live in tsconfig.node.json.
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "e2e/harness.ts"]
+}
