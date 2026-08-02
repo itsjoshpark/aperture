@@ -11,8 +11,9 @@ import { Aperture } from "lucide-vue-next";
 
       <p class="mt-3 text-sm text-muted-foreground">
         Aperture reads and renames images directly on your disk using the File System Access API.
-        Safari and Firefox have not implemented it, so there is no way for this page to open a
-        folder there.
+        Safari and Firefox support that API only for a private sandbox of the browser's own — they
+        have no way to hand a page a folder of yours, so there is nothing here for this page to
+        open.
       </p>
 
       <p class="mt-3 text-sm text-muted-foreground">

@@ -1,7 +1,11 @@
 import { isImageName, splitName } from "@/lib/file-names";
 import { FileOperationError, type FileSystemPort, type ImageEntry } from "./types";
 
-/** Chromium-only. Everything else gets `UnsupportedBrowser.vue`. */
+/**
+ * Probes the picker, not the API. Firefox and Safari implement the handle
+ * interfaces — a broader test passes there and then strands us with no way to
+ * name a folder. Everything that fails this gets `UnsupportedBrowser.vue`.
+ */
 export function isFileSystemAccessSupported(): boolean {
   return typeof globalThis.window?.showDirectoryPicker === "function";
 }

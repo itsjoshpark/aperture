@@ -69,13 +69,23 @@ come from by passing a different `FolderSource`.
 
 ## Things that will bite you
 
-**The File System Access API is Chromium-only.** Safari and Firefox get
-`UnsupportedBrowser.vue`. There is deliberately no demo mode.
+**The directory picker is Chromium-only — not the whole API.** Firefox 111+ and Safari 15.2+
+implement the handle interfaces, and every call `fsa-adapter.ts` makes except the picker itself works
+there. What they do not implement is `showDirectoryPicker()`, so the only directory handle you can
+obtain is `navigator.storage.getDirectory()` — the origin private file system, a sandbox that by
+definition never contains the user's photos. Every other route to a handle for a real folder
+(`getAsFileSystemHandle()` off a drop, `LaunchQueue`) is Chromium-only too, and the one cross-browser
+route to local files, `<input webkitdirectory>`, yields read-only `File` snapshots: no delete, no
+rename, no Aperture. Hence `UnsupportedBrowser.vue`, and hence deliberately no demo mode. Gate on
+`showDirectoryPicker` specifically — a broader feature test passes in Firefox and Safari and buys a
+folder picker that opens nothing.
 
 **You cannot rename a local file directly.** `FileSystemHandle.move()` is shipped only for OPFS
-files; for anything from `showDirectoryPicker()` it is behind a Chrome flag. `fsa-adapter.ts` tries
-`move()` and falls back to copy-then-delete. Consequence: **renaming resets date-modified**, because
-the bytes are rewritten. File contents (and EXIF) are unchanged. The UI says so; keep it saying so.
+files; for anything from `showDirectoryPicker()` it is behind a Chrome flag. It is also non-standard,
+and Chrome exposes it on `FileSystemFileHandle` only — never on a directory handle.
+`fsa-adapter.ts` tries `move()` and falls back to copy-then-delete. Consequence: **renaming resets
+date-modified**, because the bytes are rewritten. File contents (and EXIF) are unchanged. The UI says
+so; keep it saying so.
 
 **Deleting is permanent.** `removeEntry()` does not move anything to the Trash. Dialog copy must
 never imply otherwise.
@@ -89,7 +99,9 @@ its permission does not — it dies with the last tab of the origin, and `reques
 works inside a user gesture. Restoring a folder therefore still costs a click and a prompt, which is
 not enough better than picking it again to justify keeping handles in IndexedDB. Every session
 starts at the picker. `FileSystemPort.ensurePermission()` still exists for adapters that need it,
-but nothing in the app calls it: `showDirectoryPicker()` is asked for `readwrite` up front.
+but nothing in the app calls it: `showDirectoryPicker()` is asked for `readwrite` up front. (Its two
+methods, `queryPermission()` and `requestPermission()`, are the only other Chromium-only calls in the
+adapter — everything else has a Firefox and Safari implementation.)
 
 **Chrome cannot draw every format it will happily list**, and a photo frame with nothing in it is
 indistinguishable from a broken app. Three separate mechanisms cover that, and **any new surface that
