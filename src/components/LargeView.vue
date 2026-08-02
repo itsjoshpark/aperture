@@ -85,8 +85,8 @@ onBeforeUnmount(release);
 <template>
   <!-- Fully opaque: at even 95% the grid's white frames read through as ghost
        rectangles, and nothing should compete with the photo you came here to look at. -->
-  <div class="fixed inset-0 z-50 flex flex-col bg-[#2d2d2d]">
-    <header class="flex shrink-0 items-center gap-3 px-3 py-2 text-white">
+  <div class="fixed inset-0 z-50 flex flex-col bg-[#191919]">
+    <header class="flex shrink-0 items-center gap-3 px-3 py-2 text-white border-b border-white/10">
       <Button
         variant="overlay"
         size="icon"
@@ -110,7 +110,7 @@ onBeforeUnmount(release);
       </Button>
     </header>
 
-    <div class="relative flex min-h-0 flex-1 items-center justify-center p-4">
+    <div class="relative flex min-h-0 flex-1 items-center justify-center">
       <Button
         variant="overlay"
         size="icon"

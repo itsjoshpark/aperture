@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ImageIcon } from "lucide-vue-next";
-import { computed, shallowRef } from "vue";
 import { Slider } from "@/components/ui/slider";
 import { useAperture } from "@/composables/useAperture";
 import { MAX_TILE_SIZE, MIN_TILE_SIZE } from "@/composables/useGallery";
+import { ZoomIn, ZoomOut } from "lucide-vue-next";
+import { computed, shallowRef } from "vue";
 
 const aperture = useAperture();
 
@@ -37,7 +37,7 @@ function releaseFocus(): void {
     @pointerup="releaseFocus"
     @pointercancel="releaseFocus"
   >
-    <ImageIcon class="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+    <ZoomOut class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     <Slider
       v-model="value"
       :min="MIN_TILE_SIZE"
@@ -46,6 +46,6 @@ function releaseFocus(): void {
       class="w-32"
       label="Preview size"
     />
-    <ImageIcon class="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+    <ZoomIn class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
   </div>
 </template>

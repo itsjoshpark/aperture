@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Aperture, FolderOpen } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { useAperture } from "@/composables/useAperture";
+import { Aperture, FolderOpen } from "lucide-vue-next";
 
 const aperture = useAperture();
 </script>
@@ -9,9 +9,13 @@ const aperture = useAperture();
 <template>
   <div class="grid min-h-dvh place-items-center p-6">
     <div class="max-w-md text-center">
-      <Aperture class="mx-auto size-10 text-muted-foreground" aria-hidden="true" />
+      <Aperture
+        class="mx-auto size-20 text-muted-foreground"
+        aria-hidden="true"
+        :stroke-width="1.2"
+      />
 
-      <h1 class="mt-4 text-2xl font-semibold tracking-tight">Aperture</h1>
+      <h1 class="text-5xl font-semibold tracking-tight">Aperture</h1>
 
       <p class="mt-3 text-sm text-muted-foreground">
         Browse a folder of images, delete the ones you don't want, and drag the rest into an order —
