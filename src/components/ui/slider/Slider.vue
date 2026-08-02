@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { SliderRootEmits, SliderRootProps } from "reka-ui";
-import type { HTMLAttributes } from "vue";
-import { reactiveOmit } from "@vueuse/core";
-import { SliderRange, SliderRoot, SliderThumb, SliderTrack, useForwardPropsEmits } from "reka-ui";
 import { cn } from "@/lib/utils";
+import { reactiveOmit } from "@vueuse/core";
+import type { SliderRootEmits, SliderRootProps } from "reka-ui";
+import { SliderRange, SliderRoot, SliderThumb, SliderTrack, useForwardPropsEmits } from "reka-ui";
+import type { HTMLAttributes } from "vue";
 
 // `label` is an Aperture addition: the element carrying `role="slider"` is the
 // thumb, not the root, so a plain `aria-label` on the component would land on
@@ -22,7 +22,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
     data-slot="slider"
     :class="
       cn(
-        'relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col',
+        'relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col',
         props.class,
       )
     "
@@ -30,7 +30,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
   >
     <SliderTrack
       data-slot="slider-track"
-      class="bg-muted relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5"
+      class="bg-muted relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-1 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5"
     >
       <SliderRange
         data-slot="slider-range"
@@ -43,7 +43,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
       :key="key"
       data-slot="slider-thumb"
       :aria-label="props.label"
-      class="bg-white border-primary ring-ring/50 block size-4 shrink-0 rounded-full border shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+      class="bg-white border-primary ring-ring/50 block size-3 shrink-0 rounded-full border shadow-sm transition-[color,box-shadow] hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
     />
   </SliderRoot>
 </template>
