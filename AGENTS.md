@@ -146,6 +146,13 @@ draft is holding `ImageEntry` objects whose names no longer exist, so `apply()` 
 against the refreshed listing. Anything that keeps the session alive across a disk change has to do
 the same.
 
+**The folder's name list has exactly one owner.** `gallery.allNames` — every name in the folder,
+images or not — is what rename mode checks its targets against, and a session outlives changes to
+the folder. It used to be copied into the session at `begin()`, which meant deleting a file left the
+bar refusing to write a name nothing held any more, with no way out but restarting the session. Any
+new operation that changes what is in the folder has to update `allNames`, the way `remove()` and
+`refresh()` do.
+
 **A dragged tile never leaves its cell.** `ImageTile`'s root is the grid cell and stays put — it is
 the dashed drop placeholder — while a card _inside_ it carries the transform that follows the
 cursor. `useTileDrag` measures the root to work out that offset, so moving the transform back onto

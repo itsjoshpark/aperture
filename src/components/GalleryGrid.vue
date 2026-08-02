@@ -57,7 +57,7 @@ const drag = useTileDrag({
   },
   onBegin: async (index) => {
     // Dragging a tile *is* how you enter rename mode.
-    if (!rename.active.value) await aperture.enterRename();
+    if (!rename.active.value) aperture.enterRename();
     const entry = aperture.displayed.value[index];
     if (entry) gallery.select(entry.name);
     await nextTick();

@@ -122,8 +122,8 @@ export function createAperture(options: ApertureOptions = {}) {
 
   // ------------------------------------------------------------------- rename
 
-  async function enterRename(): Promise<void> {
-    await rename.begin(displayed.value);
+  function enterRename(): void {
+    rename.begin(displayed.value);
   }
 
   /** Escape out of rename mode — via the discard dialog if there is work to lose. */

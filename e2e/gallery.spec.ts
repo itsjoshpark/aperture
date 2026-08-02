@@ -344,6 +344,25 @@ test.describe("rename", () => {
     await expect(page.getByRole("button", { name: /^Rename \d+ files?$/ })).toBeDisabled();
   });
 
+  test("stops guarding a name once the file holding it is deleted", async ({ page }) => {
+    // Deleting shot-2.jpg leaves shot-3.jpg headed for that exact name. The
+    // collision check has to notice the folder changed under the open bar.
+    await openGallery(page, ["shot-1.jpg", "shot-2.jpg", "shot-3.jpg"]);
+
+    await page.getByRole("button", { name: "Rename…" }).click();
+
+    await tile(page, "shot-2.jpg").click();
+    await expect(selected(page)).toHaveText(/shot-2\.jpg/);
+    await page.keyboard.press("Delete");
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+    await expect(page.getByRole("gridcell")).toHaveCount(2);
+
+    await page.getByLabel("Prefix").fill("shot-");
+
+    await expect(page.getByRole("alert")).toBeHidden();
+    await expect(page.getByRole("button", { name: /^Rename \d+ files?$/ })).toBeEnabled();
+  });
+
   test("asks before discarding an arrangement", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg"]);
 

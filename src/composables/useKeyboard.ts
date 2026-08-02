@@ -25,7 +25,7 @@ export function useKeyboard(aperture: Aperture) {
       case "ArrowRight": {
         const direction = event.key === "ArrowLeft" ? "left" : "right";
         if (reorderModifier && !inLargeView) {
-          void reorderSelected(aperture, direction === "left" ? -1 : 1);
+          reorderSelected(aperture, direction === "left" ? -1 : 1);
         } else {
           aperture.moveSelectionBy(direction);
         }
@@ -36,7 +36,7 @@ export function useKeyboard(aperture: Aperture) {
       case "ArrowDown": {
         if (inLargeView) return; // vertical movement is meaningless on one image
         if (reorderModifier) {
-          void reorderSelected(
+          reorderSelected(
             aperture,
             event.key === "ArrowUp" ? -aperture.columns.value : aperture.columns.value,
           );
@@ -86,8 +86,8 @@ export function useKeyboard(aperture: Aperture) {
  * Keyboard reordering, so arranging images is not mouse-only. Entering rename
  * mode on the first press mirrors what dragging does.
  */
-async function reorderSelected(aperture: Aperture, delta: number): Promise<void> {
-  if (!aperture.rename.active.value) await aperture.enterRename();
+function reorderSelected(aperture: Aperture, delta: number): void {
+  if (!aperture.rename.active.value) aperture.enterRename();
 
   const from = aperture.selectedIndex.value;
   if (from < 0) return;

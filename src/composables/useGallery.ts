@@ -49,6 +49,18 @@ export type GalleryView = "grid" | "large";
 export function useGallery() {
   const port = shallowRef<FileSystemPort | null>(null);
   const entries = shallowRef<ImageEntry[]>([]);
+
+  /**
+   * Every name in the folder, images or not. Rename mode checks its targets
+   * against this, and it must include non-images: a target colliding with a
+   * spreadsheet is just as destructive as one colliding with a photo.
+   *
+   * Held rather than read on demand so the rename bar can flag a collision as
+   * you type — but held *here*, refreshed by everything that changes the folder,
+   * because a copy taken once when a rename session opened goes stale the moment
+   * anything is deleted and then refuses a name that is no longer taken.
+   */
+  const allNames = shallowRef<string[]>([]);
   const sort = ref<SortOrder>({ ...DEFAULT_SORT });
   const tileSize = ref(readStoredTileSize());
   const view = ref<GalleryView>("grid");
@@ -104,6 +116,7 @@ export function useGallery() {
     previews.dispose();
     port.value = null;
     entries.value = [];
+    allNames.value = [];
     selectedName.value = null;
     view.value = "grid";
     leftoverTempNames.value = [];
@@ -114,7 +127,8 @@ export function useGallery() {
     if (!active) return;
 
     entries.value = await active.list();
-    leftoverTempNames.value = findLeftoverTempNames(await active.listAllNames());
+    allNames.value = await active.listAllNames();
+    leftoverTempNames.value = findLeftoverTempNames(allNames.value);
 
     // The selected file may have been renamed or deleted out from under us.
     if (!entries.value.some((entry) => entry.name === selectedName.value)) {
@@ -150,6 +164,9 @@ export function useGallery() {
     await active.delete(name);
     thumbnails.invalidate(name);
     entries.value = entries.value.filter((entry) => entry.name !== name);
+    // Deleting does not re-list the folder, so this is what keeps the name list
+    // honest in between refreshes.
+    allNames.value = allNames.value.filter((existing) => existing !== name);
 
     if (selectedName.value === name) selectedName.value = successor?.name ?? null;
   }
@@ -157,6 +174,7 @@ export function useGallery() {
   return {
     port,
     entries,
+    allNames,
     sorted,
     sort,
     tileSize,

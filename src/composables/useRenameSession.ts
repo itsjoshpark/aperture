@@ -38,14 +38,12 @@ export function useRenameSession(gallery: Gallery) {
   const applied = ref(false);
 
   /**
-   * Every name in the folder, images or not. Held rather than read on demand so
-   * the preview can flag a collision as you type — and it must include
-   * non-images, since a target colliding with a spreadsheet is just as
-   * destructive as one colliding with a photo.
+   * The collision set is the gallery's live name list, not a copy taken when the
+   * session opened: the folder keeps changing underneath an open session — you
+   * can delete from inside it, and Finder is still there — and a name checked
+   * against a stale listing is refused for a file that no longer exists.
    */
-  const allNamesInFolder = shallowRef<string[]>([]);
-
-  const plan = computed(() => buildRenamePlan(draft.value, options.value, allNamesInFolder.value));
+  const plan = computed(() => buildRenamePlan(draft.value, options.value, gallery.allNames.value));
 
   const reordered = computed(() =>
     draft.value.some((entry, index) => entry.name !== initialNames.value[index]),
@@ -75,13 +73,12 @@ export function useRenameSession(gallery: Gallery) {
 
   const canUndo = computed(() => undoRecords.value !== null && !applying.value);
 
-  async function begin(order: ImageEntry[]): Promise<void> {
+  function begin(order: ImageEntry[]): void {
     if (active.value) return;
     active.value = true;
     draft.value = [...order];
     initialNames.value = order.map((entry) => entry.name);
     failure.value = null;
-    allNamesInFolder.value = (await gallery.port.value?.listAllNames()) ?? [];
   }
 
   function move(from: number, to: number): void {
