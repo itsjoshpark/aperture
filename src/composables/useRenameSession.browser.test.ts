@@ -33,15 +33,20 @@ function setOptions(
 }
 
 test("forgets a file deleted while the session is open", async () => {
-  const { gallery, rename } = await openSession(["Ian 01.heic", "Ian 02.heic", "Ian 03.heic"]);
+  const { gallery, rename } = await openSession([
+    "Photo 01.heic",
+    "Photo 02.heic",
+    "Photo 03.heic",
+  ]);
 
   // Exactly what `confirmDelete` does once the tile has animated out.
-  await gallery.remove("Ian 02.heic", rename.draft.value);
-  rename.forget("Ian 02.heic");
+  await gallery.remove("Photo 02.heic", rename.draft.value);
+  rename.forget("Photo 02.heic");
 
   // Two files left, so the second one is headed for the name the deleted file
-  // used to hold. Nothing is in the way of that any more.
-  setOptions(rename, { prefix: "Ian ", padding: 2 });
+  // used to hold. Nothing is in the way of that any more — and the space in the
+  // prefix is legal, whatever the character class in `naming.ts` looks like.
+  setOptions(rename, { prefix: "Photo ", padding: 2 });
 
   expect(rename.plan.value.problems).toEqual([]);
   expect(rename.plan.value.valid).toBe(true);
