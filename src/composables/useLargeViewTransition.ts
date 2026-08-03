@@ -56,9 +56,9 @@ function animateImage(
   const full = image.getBoundingClientRect();
   if (full.width === 0 || full.height === 0) return;
 
-  // Scale by width alone: both the tile and the large view letterbox with
-  // `object-contain`, so the visible image has the same aspect ratio in each and
-  // matching the widths matches the picture.
+  // Scale by width alone: both rects are the photo as it is drawn rather than
+  // the box it sits in, so they share an aspect ratio already and matching the
+  // widths matches the picture.
   const scale = thumbnail.width / full.width;
   const dx = thumbnail.left + thumbnail.width / 2 - (full.left + full.width / 2);
   const dy = thumbnail.top + thumbnail.height / 2 - (full.top + full.height / 2);
