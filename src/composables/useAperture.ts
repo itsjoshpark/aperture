@@ -41,6 +41,13 @@ export function createAperture(options: ApertureOptions = {}) {
   const columns = ref(1);
 
   /**
+   * The tile sizes that look different at the current width, published by the
+   * same observer. It is the grid that knows its width and its gap, and the
+   * size slider that needs the answer.
+   */
+  const sizeStops = ref<number[]>([]);
+
+  /**
    * What the grid actually shows. Rename mode takes over the ordering — the
    * whole point is to arrange images into an order that sorting cannot express.
    */
@@ -147,6 +154,7 @@ export function createAperture(options: ApertureOptions = {}) {
     guard,
     motion,
     columns,
+    sizeStops,
     displayed,
     selectedIndex,
     selectedEntry,

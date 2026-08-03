@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Slider } from "@/components/ui/slider";
 import { useAperture } from "@/composables/useAperture";
-import { MAX_TILE_SIZE, MIN_TILE_SIZE } from "@/composables/useGallery";
+import { stopIndexFor } from "@/lib/grid-geometry";
 import { ZoomIn, ZoomOut } from "lucide-vue-next";
 import { computed, shallowRef } from "vue";
 
@@ -9,12 +9,33 @@ const aperture = useAperture();
 
 const root = shallowRef<HTMLElement | null>(null);
 
+/**
+ * The slider moves between column counts, not pixels: the grid stretches its
+ * tracks to fill the row, so most of a continuous range of sizes draws exactly
+ * the same picture and the thumb slides through dead zones.
+ *
+ * The grid publishes its stops one resize-observer callback after this mounts;
+ * until then the only size known to be drawable is the one already chosen.
+ */
+const stops = computed(() =>
+  aperture.sizeStops.value.length > 0
+    ? aperture.sizeStops.value
+    : [aperture.gallery.tileSize.value],
+);
+
+const index = computed(() => stopIndexFor(stops.value, aperture.gallery.tileSize.value));
+
 const value = computed({
-  get: () => [aperture.gallery.tileSize.value],
+  get: () => [index.value],
   set: ([next]) => {
-    if (next !== undefined) aperture.gallery.tileSize.value = next;
+    const size = next === undefined ? undefined : stops.value[next];
+    if (size !== undefined) aperture.gallery.tileSize.value = size;
   },
 });
+
+// The slider's own value is a position in that list, which says nothing out
+// loud; announce the size it stands for.
+const valueText = computed(() => `${stops.value[index.value]} pixels`);
 
 /**
  * Reka focuses the thumb on pointerdown, which is right for a control you are
@@ -40,11 +61,12 @@ function releaseFocus(): void {
     <ZoomOut class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     <Slider
       v-model="value"
-      :min="MIN_TILE_SIZE"
-      :max="MAX_TILE_SIZE"
-      :step="8"
+      :min="0"
+      :max="stops.length - 1"
+      :step="1"
       class="w-32"
       label="Preview size"
+      :value-text="valueText"
     />
     <ZoomIn class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
   </div>
