@@ -48,7 +48,7 @@ const count = computed(() => aperture.displayed.value.length);
         @click="aperture.enterRename()"
       >
         <Pencil class="size-4" />
-        Rename…
+        Bulk Rename…
       </Button>
 
       <Button

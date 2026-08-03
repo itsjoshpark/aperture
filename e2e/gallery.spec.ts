@@ -331,7 +331,7 @@ test.describe("rename", () => {
   test("keeps the arrangement visible after renaming", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
-    await page.getByRole("button", { name: "Rename…" }).click();
+    await page.getByRole("button", { name: "Bulk Rename…" }).click();
     await page.getByLabel("Prefix").fill("shot-");
     await page.getByRole("button", { name: /^Rename \d+ files?$/ }).click();
 
@@ -340,7 +340,7 @@ test.describe("rename", () => {
     // Closing the bar afterwards must not prompt — the work is already on disk.
     await page.getByRole("button", { name: "Done" }).click();
     await expect(page.getByRole("alertdialog")).toBeHidden();
-    await expect(page.getByRole("button", { name: "Rename…" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Bulk Rename…" })).toBeVisible();
   });
 
   test("reorders from the keyboard as well as the mouse", async ({ page }) => {
@@ -357,7 +357,7 @@ test.describe("rename", () => {
     // it is, but the collision case we want is the target already existing.
     await openGallery(page, ["a.jpg", "b.jpg"]);
 
-    await page.getByRole("button", { name: "Rename…" }).click();
+    await page.getByRole("button", { name: "Bulk Rename…" }).click();
     await page.getByLabel("Prefix").fill("a/b");
 
     await expect(page.getByRole("alert")).toContainText('cannot contain "/"');
@@ -369,7 +369,7 @@ test.describe("rename", () => {
     // collision check has to notice the folder changed under the open bar.
     await openGallery(page, ["shot-1.jpg", "shot-2.jpg", "shot-3.jpg"]);
 
-    await page.getByRole("button", { name: "Rename…" }).click();
+    await page.getByRole("button", { name: "Bulk Rename…" }).click();
 
     await tile(page, "shot-2.jpg").click();
     await expect(selected(page)).toHaveText(/shot-2\.jpg/);
@@ -386,21 +386,21 @@ test.describe("rename", () => {
   test("asks before discarding an arrangement", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg"]);
 
-    await page.getByRole("button", { name: "Rename…" }).click();
+    await page.getByRole("button", { name: "Bulk Rename…" }).click();
     await page.getByLabel("Prefix").fill("trip-");
     await page.getByRole("button", { name: "Cancel" }).click();
 
     await expect(page.getByRole("alertdialog")).toContainText("not renamed them yet");
 
     await page.getByRole("button", { name: "Discard changes" }).click();
-    await expect(page.getByRole("button", { name: "Rename…" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Bulk Rename…" })).toBeVisible();
     expect(await diskNames(page)).toEqual(["a.jpg", "b.jpg"]);
   });
 
   test("leaves no temp files behind", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
-    await page.getByRole("button", { name: "Rename…" }).click();
+    await page.getByRole("button", { name: "Bulk Rename…" }).click();
     await page.getByLabel("Prefix").fill("x");
     await page.getByRole("button", { name: /^Rename \d+ files?$/ }).click();
 
