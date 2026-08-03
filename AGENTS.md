@@ -193,6 +193,21 @@ not a smell. `Slider.vue` has one Aperture change: a `label` prop, because `role
 the thumb and a plain `aria-label` would land on the root and leave the control unnamed. Mark further
 edits the same way, so a regeneration does not quietly drop them.
 
+## Comments
+
+A comment earns its place by saying something the code cannot. Nearly every constraint in this file
+is invisible at the call site that depends on it — that is the bar.
+
+- **Short.** A line or two; three when the reason genuinely needs it. Anything longer is a section of
+  this file, not a comment.
+- **Only for what is not obvious from reading the code.** Explain why the strange thing is strange —
+  why the rename is two-phase, why the root gets `transition: none`, why scroll happens before
+  measure. If the next line already tells the reader, delete the comment.
+- **No syntax narration.** `// loop over the entries` adds nothing to the `for` beneath it, and
+  `// set the flag` adds nothing to the assignment.
+- **No lore.** No PR or issue numbers, no review feedback, no names, no dates, no "kept for X". Git
+  history holds that, and unlike the comment it stays accurate. Same for `TODO(name)`.
+
 ## Deployment
 
 Pushing to `main` builds and deploys to GitHub Pages. `main` is protected: PRs only, `verify` and
