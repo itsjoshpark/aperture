@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { jpegWithDateTaken } from "./fs/fixtures";
 import { MemoryAdapter, type MemoryFile } from "./fs/memory-adapter";
 import { sortEntries } from "./sort";
 
@@ -7,6 +8,9 @@ async function entriesOf(files: Array<MemoryFile | string>) {
 }
 
 const names = (entries: Array<{ name: string }>) => entries.map((entry) => entry.name);
+
+/** Real JPEG bytes carrying that EXIF date and nothing else. */
+const dated = (wallClock: string) => jpegWithDateTaken(wallClock);
 
 describe("sortEntries", () => {
   it("sorts numbers the way a person reads them", async () => {
@@ -54,7 +58,7 @@ describe("sortEntries", () => {
       { name: "mid.jpg", lastModified: 2000 },
     ]);
 
-    expect(names(sortEntries(entries, { field: "date", direction: "asc" }))).toEqual([
+    expect(names(sortEntries(entries, { field: "modified", direction: "asc" }))).toEqual([
       "old.jpg",
       "mid.jpg",
       "new.jpg",
@@ -67,9 +71,67 @@ describe("sortEntries", () => {
       { name: "a.jpg", lastModified: 1000 },
     ]);
 
-    expect(names(sortEntries(entries, { field: "date", direction: "asc" }))).toEqual([
+    expect(names(sortEntries(entries, { field: "modified", direction: "asc" }))).toEqual([
       "a.jpg",
       "b.jpg",
+    ]);
+  });
+
+  it("sorts by the date in the file, not the date on the file", async () => {
+    // Modified dates ascend with the names; EXIF says the opposite. Renaming
+    // rewrites the first and leaves the second alone, so this is what happens
+    // after every rename Aperture performs.
+    const entries = await entriesOf([
+      { name: "a.jpg", lastModified: 1000, bytes: dated("2021:03:03 10:00:00") },
+      { name: "b.jpg", lastModified: 2000, bytes: dated("2021:02:02 10:00:00") },
+      { name: "c.jpg", lastModified: 3000, bytes: dated("2021:01:01 10:00:00") },
+    ]);
+
+    expect(names(sortEntries(entries, { field: "taken", direction: "asc" }))).toEqual([
+      "c.jpg",
+      "b.jpg",
+      "a.jpg",
+    ]);
+  });
+
+  it("places a file with no EXIF date by its modified date", async () => {
+    const taken = (wall: string) => Date.parse(wall);
+    const entries = await entriesOf([
+      { name: "early.jpg", bytes: dated("2021:01:01 10:00:00") },
+      { name: "late.jpg", bytes: dated("2021:03:03 10:00:00") },
+      // A screenshot: no EXIF, and a modified date that falls between the two.
+      { name: "screenshot.png", lastModified: taken("2021-02-02T10:00:00") },
+    ]);
+
+    expect(names(sortEntries(entries, { field: "taken", direction: "asc" }))).toEqual([
+      "early.jpg",
+      "screenshot.png",
+      "late.jpg",
+    ]);
+  });
+
+  it("falls back to name when dates taken tie", async () => {
+    const bytes = dated("2021:01:01 10:00:00");
+    const entries = await entriesOf([
+      { name: "b.jpg", bytes },
+      { name: "a.jpg", bytes },
+    ]);
+
+    expect(names(sortEntries(entries, { field: "taken", direction: "asc" }))).toEqual([
+      "a.jpg",
+      "b.jpg",
+    ]);
+  });
+
+  it("reverses date taken on descending", async () => {
+    const entries = await entriesOf([
+      { name: "early.jpg", bytes: dated("2021:01:01 10:00:00") },
+      { name: "late.jpg", bytes: dated("2021:03:03 10:00:00") },
+    ]);
+
+    expect(names(sortEntries(entries, { field: "taken", direction: "desc" }))).toEqual([
+      "late.jpg",
+      "early.jpg",
     ]);
   });
 

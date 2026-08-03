@@ -8,8 +8,15 @@ import { expect, test, type Page } from "@playwright/test";
 
 const HARNESS = "e2e/harness.html";
 
-async function openGallery(page: Page, files?: string[]): Promise<void> {
-  const query = files ? `?files=${files.join(",")}` : "";
+async function openGallery(
+  page: Page,
+  files?: string[],
+  options: { taken?: boolean } = {},
+): Promise<void> {
+  const params = [files ? `files=${files.join(",")}` : "", options.taken ? "taken" : ""].filter(
+    Boolean,
+  );
+  const query = params.length > 0 ? `?${params.join("&")}` : "";
   await page.goto(`${HARNESS}${query}`);
   await page.getByRole("button", { name: "Open folder…" }).click();
   await expect(page.getByRole("grid")).toBeVisible();
@@ -43,6 +50,33 @@ test("sorts by name, reading numbers the way people do", async ({ page }) => {
   await openGallery(page, ["IMG_10.jpg", "IMG_2.jpg", "IMG_1.jpg"]);
 
   await expect(page.getByRole("gridcell")).toHaveText([/IMG_1\.jpg/, /IMG_2\.jpg/, /IMG_10\.jpg/]);
+});
+
+test("sorts by the date taken read out of the files", async ({ page }) => {
+  // Seeded so name, date modified and date taken each disagree: the EXIF dates
+  // run backwards, so this order can only come from reading the bytes.
+  await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"], { taken: true });
+
+  await page.getByRole("button", { name: /Name/ }).click();
+  await page.getByRole("menuitem", { name: "Date taken" }).click();
+
+  await expect(page.getByRole("button", { name: /Date taken/ })).toBeVisible();
+  await expect(page.getByRole("gridcell")).toHaveText([/c\.jpg/, /b\.jpg/, /a\.jpg/]);
+});
+
+test("numbers a rename in date-taken order", async ({ page }) => {
+  await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"], { taken: true });
+
+  await page.getByRole("button", { name: /Name/ }).click();
+  await page.getByRole("menuitem", { name: "Date taken" }).click();
+  await expect(page.getByRole("gridcell")).toHaveText([/c\.jpg/, /b\.jpg/, /a\.jpg/]);
+
+  // Rename mode opens on whatever the grid is showing, so sorting by date taken
+  // and renaming is how you get filenames that run in the order things happened.
+  await page.getByRole("button", { name: "Bulk Rename…" }).click();
+  await page.getByRole("button", { name: /^Rename \d+ files?$/ }).click();
+
+  await expect(page.getByRole("gridcell")).toHaveText([/^1\.jpg/, /^2\.jpg/, /^3\.jpg/]);
 });
 
 test("reverses the order on descending", async ({ page }) => {

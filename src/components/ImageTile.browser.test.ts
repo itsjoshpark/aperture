@@ -23,6 +23,7 @@ function entryFor(name = "photo.png"): ImageEntry {
     ext: ".png",
     size: PNG_64.byteLength,
     lastModified: 1_700_000_000_000,
+    dateTaken: null,
     getFile: async () => fileOf(PNG_64, name, "image/png"),
   };
 }
@@ -36,6 +37,7 @@ function entryOver(name: string, bytes: Uint8Array, type: string): ImageEntry {
     ext,
     size: bytes.byteLength,
     lastModified: 1_700_000_000_000,
+    dateTaken: null,
     getFile: async () => fileOf(bytes, name, type),
   };
 }

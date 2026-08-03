@@ -57,6 +57,134 @@ export const HEIC_64 = bytesOf(
     "P+kcu1p06NcEpN+A/t7E7IOPR/I9DscYPnG/vjPIYjKlJBYGU5T+xF4YZJ4I4IkBos1Ziric1ct1Dpg4qaM7",
 );
 
+/**
+ * The same 64x64 HEIC carrying EXIF: `DateTimeOriginal` 2019-11-02 18:44:01 at
+ * `OffsetTimeOriginal` +09:00, so 2019-11-02T09:44:01Z.
+ *
+ * Real bytes off `exiftool` rather than a hand-built approximation, because the
+ * ISO-BMFF path is the intricate one — the date is an item in its own right,
+ * described by `iinf` and placed by `iloc` — and a fixture written to match the
+ * parser would only prove the parser agrees with itself.
+ */
+export const HEIC_64_DATED = bytesOf(
+  "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",
+);
+
+/** A 64x64 JPEG. The base `jpegWithDateTaken` stamps a date onto. */
+export const JPEG_64 = bytesOf(
+  "/9j/wAARCABAAEADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAA" +
+    "F9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZ" +
+    "WmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+" +
+    "Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAEC" +
+    "AxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZG" +
+    "VmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn" +
+    "6Onq8vP09fb3+Pn6/9sAQwAJCQkJCQkQCQkQFhAQEBYeFhYWFh4mHh4eHh4mLiYmJiYmJi4uLi4uLi4uNzc3Nzc3QEBAQEBISE" +
+    "hISEhISEhI/9sAQwELDAwSERIfEREfSzMqM0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tL" +
+    "S0tL/90ABAAE/9oADAMBAAIRAxEAPwDDooorgP0AKKKKACiiigAooooA/9DDooorgP0AKKKKACiiigAooooA/9HDooorgP0AKK" +
+    "KKACiiigAooooA/9LDooorgP0AKKKKACiiigAooooA/9k=",
+);
+
+/**
+ * `JPEG_64` with an EXIF date stamped into an APP1 segment.
+ *
+ * Spliced into a real JPEG rather than assembled from scratch so the result
+ * still draws — a fixture that parses but shows "No preview" would quietly turn
+ * every tile in an e2e run into a broken one.
+ */
+export function jpegWithDateTaken(
+  wallClock: string,
+  options: { offset?: string } = {},
+): Uint8Array {
+  const date = `${wallClock}\0`;
+  const offset = options.offset === undefined ? "" : `${options.offset}\0`;
+  const entries = offset === "" ? 1 : 2;
+
+  // IFD0 holds one entry pointing at the Exif IFD; the dates live in that.
+  const exifIfdAt = 8 + 2 + 12 + 4;
+  const valuesAt = exifIfdAt + 2 + 12 * entries + 4;
+  const tiff = new Uint8Array(valuesAt + date.length + offset.length);
+  const view = new DataView(tiff.buffer);
+
+  view.setUint16(0, 0x4d4d); // big-endian, as Apple writes it
+  view.setUint16(2, 42);
+  view.setUint32(4, 8);
+
+  view.setUint16(8, 1);
+  writeEntry(view, 10, 0x8769, 4, 1, exifIfdAt); // ExifIFDPointer
+  view.setUint32(22, 0); // no IFD1
+
+  view.setUint16(exifIfdAt, entries);
+  writeEntry(view, exifIfdAt + 2, 0x9003, 2, date.length, valuesAt); // DateTimeOriginal
+  if (offset !== "") {
+    // OffsetTimeOriginal
+    writeEntry(view, exifIfdAt + 14, 0x9011, 2, offset.length, valuesAt + date.length);
+  }
+  view.setUint32(exifIfdAt + 2 + 12 * entries, 0);
+
+  writeAscii(tiff, valuesAt, date);
+  writeAscii(tiff, valuesAt + date.length, offset);
+
+  // APP1 goes straight after SOI, where every decoder looks for it first.
+  const app1 = 2 + 6 + tiff.length;
+  const bytes = new Uint8Array(JPEG_64.length + 2 + app1);
+  bytes.set([0xff, 0xd8, 0xff, 0xe1, app1 >> 8, app1 & 0xff], 0);
+  writeAscii(bytes, 6, "Exif\0\0");
+  bytes.set(tiff, 12);
+  bytes.set(JPEG_64.subarray(2), 12 + tiff.length);
+  return bytes;
+}
+
+function writeEntry(
+  view: DataView,
+  at: number,
+  tag: number,
+  type: number,
+  count: number,
+  value: number,
+): void {
+  view.setUint16(at, tag);
+  view.setUint16(at + 2, type);
+  view.setUint32(at + 4, count);
+  view.setUint32(at + 8, value);
+}
+
+function writeAscii(bytes: Uint8Array, at: number, text: string): void {
+  for (let i = 0; i < text.length; i++) bytes[at + i] = text.charCodeAt(i);
+}
+
 /** `File` for one of the above, ready for an `ImageEntry.getFile()`. */
 export function fileOf(bytes: Uint8Array, name: string, type: string): File {
   return new File([bytes as unknown as BlobPart], name, { type });

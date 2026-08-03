@@ -1,3 +1,4 @@
+import { readDatesTaken } from "@/lib/exif";
 import { isImageName, splitName } from "@/lib/file-names";
 import { FileOperationError, type FileSystemPort, type ImageEntry } from "./types";
 
@@ -46,21 +47,26 @@ export class FsaAdapter implements FileSystemPort {
   }
 
   async list(): Promise<ImageEntry[]> {
-    const entries: ImageEntry[] = [];
+    const files: Array<{ handle: FileSystemFileHandle; file: File }> = [];
     for await (const handle of this.dir.values()) {
       if (handle.kind !== "file" || !isImageName(handle.name)) continue;
-      const file = await handle.getFile();
+      files.push({ handle, file: await handle.getFile() });
+    }
+
+    const dates = await readDatesTaken(files.map(({ file }) => file));
+
+    return files.map(({ handle, file }, index) => {
       const { base, ext } = splitName(handle.name);
-      entries.push({
+      return {
         name: handle.name,
         base,
         ext,
         size: file.size,
         lastModified: file.lastModified,
+        dateTaken: dates[index] ?? null,
         getFile: () => handle.getFile(),
-      });
-    }
-    return entries;
+      };
+    });
   }
 
   async listAllNames(): Promise<string[]> {

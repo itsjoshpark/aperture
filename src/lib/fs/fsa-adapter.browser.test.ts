@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { jpegWithDateTaken } from "./fixtures";
 import { FsaAdapter } from "./fsa-adapter";
 
 /**
@@ -74,6 +75,35 @@ describe("list", () => {
 
     expect(entry!.size).toBe(PNG.byteLength);
     expect(entry!.lastModified).toBeGreaterThan(0);
+  });
+
+  it("reads the date taken off the disk, and leaves it null where there is none", async () => {
+    await write("shot.jpg", jpegWithDateTaken("2019:11:02 18:44:01", { offset: "+09:00" }));
+    await write("screenshot.png");
+
+    const entries = await new FsaAdapter(dir).list();
+    const byName = new Map(entries.map((entry) => [entry.name, entry]));
+
+    expect(byName.get("shot.jpg")?.dateTaken?.wallClock).toBe("2019-11-02T18:44:01");
+    expect(byName.get("screenshot.png")?.dateTaken).toBeNull();
+  });
+
+  it("keeps the date taken paired with the right file when reads finish out of order", async () => {
+    // The reads are overlapped, so nothing guarantees they settle in the order
+    // they were started; only the index they were issued against does.
+    for (let i = 0; i < 20; i++) {
+      await write(
+        `IMG_${i}.jpg`,
+        jpegWithDateTaken(`2019:11:02 18:44:${String(i).padStart(2, "0")}`),
+      );
+    }
+
+    const entries = await new FsaAdapter(dir).list();
+
+    for (const entry of entries) {
+      const seconds = String(Number(entry.base.slice(4))).padStart(2, "0");
+      expect(entry.dateTaken?.wallClock).toBe(`2019-11-02T18:44:${seconds}`);
+    }
   });
 
   it("hands back a readable File", async () => {

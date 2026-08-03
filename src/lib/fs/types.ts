@@ -1,3 +1,5 @@
+import type { DateTaken } from "@/lib/exif";
+
 /**
  * The one seam between Aperture and the disk.
  *
@@ -15,6 +17,14 @@ export interface ImageEntry {
   ext: string;
   size: number;
   lastModified: number;
+  /**
+   * EXIF `DateTimeOriginal`, when the file carries one. Null for screenshots,
+   * downloads and anything else that never went through a camera.
+   *
+   * Worth the read because renaming resets `lastModified` — EXIF is part of the
+   * contents, so this is the only date that survives what Aperture does.
+   */
+  dateTaken: DateTaken | null;
   getFile(): Promise<File>;
 }
 

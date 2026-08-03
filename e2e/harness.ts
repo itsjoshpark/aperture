@@ -1,4 +1,4 @@
-import { HEIC_64, PNG_64 } from "@/lib/fs/fixtures";
+import { HEIC_64, jpegWithDateTaken, PNG_64 } from "@/lib/fs/fixtures";
 import { MemoryAdapter, type MemoryFile } from "@/lib/fs/memory-adapter";
 import type { FolderSource } from "@/lib/fs/folder-source";
 import type { FileSystemPort } from "@/lib/fs/types";
@@ -30,11 +30,14 @@ declare global {
  * Real bytes matched to the extension, so a `.heic` in a spec is genuinely a
  * HEIC — the whole point of that test is that Chrome cannot draw it and libheif
  * has to.
+ *
+ * `taken` puts a real EXIF date in the bytes rather than alongside them, so the
+ * app has to read one to sort by it.
  */
-function contentFor(name: string): { bytes: Uint8Array; type: string } {
-  return /\.heic$|\.heif$/i.test(name)
-    ? { bytes: HEIC_64, type: "image/heic" }
-    : { bytes: PNG_64, type: "image/png" };
+function contentFor(name: string, taken?: string): { bytes: Uint8Array; type: string } {
+  if (/\.heic$|\.heif$/i.test(name)) return { bytes: HEIC_64, type: "image/heic" };
+  if (taken) return { bytes: jpegWithDateTaken(taken), type: "image/jpeg" };
+  return { bytes: PNG_64, type: "image/png" };
 }
 
 function seedFiles(): MemoryFile[] {
@@ -49,11 +52,22 @@ function seedFiles(): MemoryFile[] {
     "trail.jpg",
   ];
 
+  // `?taken` dates the files backwards, so date taken, date modified and name
+  // each give a different order and a spec cannot pass by accident.
+  const dated = params.has("taken");
+
   return names.map((name, index) => ({
     name,
-    ...contentFor(name),
+    ...contentFor(name, dated ? takenAt(names.length - index) : undefined),
     lastModified: 1_700_000_000_000 + index * 60_000,
   }));
+}
+
+/** An EXIF timestamp `minutes` into 2019-11-02, as `DateTimeOriginal` spells it. */
+function takenAt(minutes: number): string {
+  return `2019:11:02 ${String(9 + Math.floor(minutes / 60)).padStart(2, "0")}:${String(
+    minutes % 60,
+  ).padStart(2, "0")}:00`;
 }
 
 const adapter = new MemoryAdapter(seedFiles(), { label: "Test Folder" });

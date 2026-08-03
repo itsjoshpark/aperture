@@ -1,6 +1,6 @@
 import type { ImageEntry } from "./fs/types";
 
-export type SortField = "name" | "date";
+export type SortField = "name" | "modified" | "taken";
 export type SortDirection = "asc" | "desc";
 
 export interface SortOrder {
@@ -24,18 +24,35 @@ export function compareByName(a: ImageEntry, b: ImageEntry): number {
   return byName !== 0 ? byName : a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
 }
 
-export function compareByDate(a: ImageEntry, b: ImageEntry): number {
+export function compareByModified(a: ImageEntry, b: ImageEntry): number {
   const byDate = a.lastModified - b.lastModified;
   return byDate !== 0 ? byDate : compareByName(a, b);
 }
 
+/**
+ * Files with no EXIF date fall back to their modified date rather than being
+ * herded to one end. A folder is usually mostly camera files with a screenshot
+ * or two in it, and burying those under a heading is a worse answer than putting
+ * each one roughly where it belongs.
+ */
+export function compareByTaken(a: ImageEntry, b: ImageEntry): number {
+  const byDate = (a.dateTaken?.epoch ?? a.lastModified) - (b.dateTaken?.epoch ?? b.lastModified);
+  return byDate !== 0 ? byDate : compareByName(a, b);
+}
+
+const COMPARATORS: Record<SortField, (a: ImageEntry, b: ImageEntry) => number> = {
+  name: compareByName,
+  modified: compareByModified,
+  taken: compareByTaken,
+};
+
 export function sortEntries(entries: ImageEntry[], order: SortOrder): ImageEntry[] {
-  const compare = order.field === "name" ? compareByName : compareByDate;
-  const sorted = [...entries].sort(compare);
+  const sorted = [...entries].sort(COMPARATORS[order.field]);
   return order.direction === "asc" ? sorted : sorted.reverse();
 }
 
 export const SORT_LABELS: Record<SortField, string> = {
   name: "Name",
-  date: "Date modified",
+  modified: "Date modified",
+  taken: "Date taken",
 };
