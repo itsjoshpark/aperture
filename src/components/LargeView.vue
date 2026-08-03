@@ -83,8 +83,8 @@ onBeforeUnmount(release);
 </script>
 
 <template>
-  <!-- Fully opaque: at even 95% the grid's white frames read through as ghost
-       rectangles, and nothing should compete with the photo you came here to look at. -->
+  <!-- Fully opaque: at even 95% the grid reads through as a ghost of itself, and
+       nothing should compete with the photo you came here to look at. -->
   <div class="fixed inset-0 z-50 flex flex-col bg-[#191919]">
     <header class="flex shrink-0 items-center gap-3 px-3 py-2 text-white border-b border-white/10">
       <Button
