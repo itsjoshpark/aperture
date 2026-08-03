@@ -112,11 +112,12 @@ test("has no placeholder when it is not being dragged", async () => {
   ).toBeNull();
 });
 
-test("shows the file name and a delete control", async () => {
+test("shows the file name and no controls of its own", async () => {
   const screen = mount(entryFor("beach.png"));
 
   await expect.element(screen.getByText("beach.png")).toBeVisible();
-  await expect.element(screen.getByRole("button", { name: /Delete beach\.png/ })).toBeVisible();
+  // Nothing is drawn beside a photograph. Delete lives in the toolbar.
+  expect(screen.getByRole("gridcell").element().querySelector("button")).toBeNull();
 });
 
 test("says so when nothing can decode the format", async () => {

@@ -14,8 +14,8 @@ browser's File System Access API, so your photos never leave your machine.
 - **Gallery view** — an evenly spaced grid of framed thumbnails with a size slider, sorted by name
   or date modified.
 - **Large view** — press `Space` for a full-size image with a filmstrip along the bottom.
-- **Delete** — from the tile's trash icon or the `Delete` key. This is a permanent delete, not a
-  move to the Trash.
+- **Delete** — from the toolbar's Delete button or the `Delete` key. This is a permanent delete, not
+  a move to the Trash.
 - **Sequential rename** — start dragging a thumbnail (or press `Cmd`/`Ctrl` + `←`/`→`) and Aperture
   switches to rename mode. Arrange the images, set a prefix and/or suffix, and see every new name on
   its tile before you commit. Afterwards the Rename button becomes Undo, which puts every original
