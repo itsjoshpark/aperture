@@ -27,9 +27,10 @@ const emit = defineEmits<{
 
 const root = shallowRef<HTMLElement | null>(null);
 const url = ref<string | null>(null);
-const loaded = ref(false);
 const failed = ref(false);
 const pending = ref(false);
+/** The photo's shape, and so also the proof that it has decoded. */
+const ratio = ref<number | null>(null);
 /**
  * The name this tile has an outstanding `acquire()` for. Tracked separately from
  * `url`, because a HEIC takes hundreds of milliseconds to decode and everything
@@ -50,6 +51,20 @@ const renaming = computed(() => !!props.previewName && props.previewName !== pro
 const unsupported = computed(() => !isPreviewable(props.entry.name));
 const noPreview = computed(() => unsupported.value || failed.value);
 const decoding = computed(() => pending.value && !noPreview.value);
+const loaded = computed(() => ratio.value !== null);
+
+/**
+ * Where `object-contain` will draw the photo inside the square, as percentages
+ * of that square: a box sized off the image instead is free to outgrow the
+ * tile, and the tiles being one size is what lines a row of them up.
+ */
+const photoBox = computed(() => {
+  const shape = ratio.value;
+  if (shape === null) return { width: "100%", height: "100%" };
+  return shape >= 1
+    ? { width: "100%", height: `${100 / shape}%` }
+    : { width: `${100 * shape}%`, height: "100%" };
+});
 
 /**
  * A folder of 2,000 photos is far more pixel data than a tab can hold, so a tile
@@ -99,11 +114,18 @@ async function acquire(): Promise<void> {
   url.value = next;
 }
 
+function onLoad(event: Event): void {
+  const image = event.target as HTMLImageElement;
+  // Chrome reports these already rotated by EXIF orientation, which is the shape
+  // the photo is actually drawn in.
+  ratio.value = image.naturalWidth / image.naturalHeight;
+}
+
 function release(): void {
   url.value = null;
-  loaded.value = false;
   failed.value = false;
   pending.value = false;
+  ratio.value = null;
 
   if (requested === null) return;
   props.cache.release(requested);
@@ -195,32 +217,48 @@ defineExpose({
           : undefined
       "
     >
-      <!-- White, because on a wall of bare photographs against dark chrome it is
-           the only thing that cannot be mistaken for part of an image. On its own
-           layer so the image box's `overflow-hidden` cannot clip it and so
-           drawing it does not shift the photo by a pixel. -->
-      <span
-        v-if="selected"
-        aria-hidden="true"
-        class="pointer-events-none absolute inset-0 rounded-sm ring-2 ring-white ring-offset-2 ring-offset-background"
-      />
+      <!--
+        The square every tile occupies whatever shape its photograph is, which is
+        what keeps a row of them lined up. No `overflow-hidden`: the selection
+        border is drawn outside the photo and would be clipped away by it.
+      -->
+      <div class="relative aspect-square w-full">
+        <!-- The photo's own box, letterboxing excluded; the square until the
+             image has decoded and reported its shape. -->
+        <div class="absolute inset-0 m-auto" :style="photoBox">
+          <!-- White, because on a wall of bare photographs against dark chrome it
+               is the only thing that cannot be mistaken for part of an image.
 
-      <div class="relative aspect-square w-full overflow-hidden rounded-sm">
-        <img
-          v-if="url && !failed"
-          :src="url"
-          :alt="entry.name"
-          draggable="false"
-          decoding="async"
-          :class="
-            cn(
-              'size-full object-contain transition-opacity duration-(--motion-fast)',
-              loaded ? 'opacity-100' : 'opacity-0',
-            )
-          "
-          @load="loaded = true"
-          @error="failed = true"
-        />
+               Two filled boxes rather than one bordered one: a border's inner
+               radius is its outer radius less its width, so a 3px band inside a
+               4px corner cannot come out square. The white box carries the
+               corner; the fill over it leaves the band and paints the gap. -->
+          <span
+            v-if="selected"
+            data-selection
+            aria-hidden="true"
+            class="pointer-events-none absolute -inset-[5px] rounded-sm bg-white"
+          >
+            <span class="absolute inset-[3px] bg-background" />
+          </span>
+
+          <!-- Positioned, so the photo paints over that fill. -->
+          <img
+            v-if="url && !failed"
+            :src="url"
+            :alt="entry.name"
+            draggable="false"
+            decoding="async"
+            :class="
+              cn(
+                'relative size-full object-contain transition-opacity duration-(--motion-fast)',
+                loaded ? 'opacity-100' : 'opacity-0',
+              )
+            "
+            @load="onLoad"
+            @error="failed = true"
+          />
+        </div>
 
         <!--
           HEIC is decoded here rather than by Chrome, which takes long enough to

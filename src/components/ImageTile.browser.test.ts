@@ -42,6 +42,21 @@ function entryOver(name: string, bytes: Uint8Array, type: string): ImageEntry {
   };
 }
 
+/** Real PNG bytes of a given shape — every fixture on disk is square. */
+async function pngOf(width: number, height: number): Promise<Uint8Array> {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d")!;
+  context.fillStyle = "#c0392b";
+  context.fillRect(0, 0, width, height);
+
+  const blob = await new Promise<Blob>((resolve) =>
+    canvas.toBlob((result) => resolve(result!), "image/png"),
+  );
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 function mount(entry = entryFor(), cache = new ThumbnailCache()) {
   return render(ImageTile, { props: { entry, cache, selected: false } });
 }
@@ -110,6 +125,79 @@ test("has no placeholder when it is not being dragged", async () => {
   expect(
     screen.getByRole("gridcell").element().querySelector("[data-drop-placeholder]"),
   ).toBeNull();
+});
+
+/**
+ * Renders one selected tile 160px wide — narrower than the photographs below are
+ * intrinsically, so a box sized off the image rather than off the square shows
+ * up as a tile of the wrong size. Resolves once the photo has taken its shape.
+ */
+async function selectedTile(name: string, bytes: Uint8Array) {
+  const screen = render(ImageTile, {
+    props: {
+      entry: entryOver(name, bytes, "image/png"),
+      cache: new ThumbnailCache(),
+      selected: true,
+    },
+  });
+  screen.container.style.width = "160px";
+
+  // Both shapes below are oblong, so a square box is one that has yet to decode.
+  const image = screen.getByRole("img", { name });
+  const box = () => image.element().getBoundingClientRect();
+  await expect.element(image).toBeVisible();
+  await expect.poll(() => box().width !== box().height).toBe(true);
+
+  const cell = image.element().closest('[role="gridcell"]')!;
+  return {
+    photo: box(),
+    cell: cell.getBoundingClientRect(),
+    border: cell.querySelector("[data-selection]")!.getBoundingClientRect(),
+  };
+}
+
+/**
+ * What is selected is the photograph, not the record: the border boxes in the
+ * photo, stops above the caption, and traces the shape of the image rather than
+ * the square it is laid out in — which the letterboxing makes different.
+ */
+test("draws the selection border around the photo and not the caption", async () => {
+  const screen = render(ImageTile, {
+    props: { entry: entryFor("beach.png"), cache: new ThumbnailCache(), selected: true },
+  });
+  await expect.element(screen.getByRole("img")).toBeVisible();
+
+  const cell = screen.getByRole("gridcell").element();
+  const border = cell.querySelector("[data-selection]")!.getBoundingClientRect();
+  const caption = screen.getByText("beach.png").element().getBoundingClientRect();
+  expect(border.bottom).toBeLessThan(caption.top);
+
+  const { photo, border: wide } = await selectedTile("wide.png", await pngOf(400, 120));
+
+  // Five pixels clear of the photo on every side: a 2px gap, then the 3px band.
+  expect(wide.left).toBeCloseTo(photo.left - 5, 0);
+  expect(wide.top).toBeCloseTo(photo.top - 5, 0);
+  expect(wide.right).toBeCloseTo(photo.right + 5, 0);
+  expect(wide.bottom).toBeCloseTo(photo.bottom + 5, 0);
+});
+
+/**
+ * The square each photo is laid out in is invisible and load-bearing: it is what
+ * lines a row of tiles up, and a photograph is almost never square. Sizing the
+ * photo's box off the image is exactly how a tile comes to be the size of its
+ * own photo instead.
+ */
+test("stays the size of its square whatever shape the photo is", async () => {
+  const tall = await selectedTile("tall.png", await pngOf(200, 300));
+  const wide = await selectedTile("wide.png", await pngOf(400, 120));
+
+  expect(tall.cell.height).toBeCloseTo(wide.cell.height, 0);
+
+  // Neither photo is bigger than the square it is laid out in.
+  for (const { photo, cell } of [tall, wide]) {
+    expect(photo.width).toBeLessThanOrEqual(cell.width + 1);
+    expect(photo.height).toBeLessThanOrEqual(cell.width + 1);
+  }
 });
 
 test("shows the file name and no controls of its own", async () => {

@@ -171,6 +171,15 @@ when the confirm handler looks for it, and the confirm silently does nothing. Bo
 _whether they are open_ separately from _what they are about_ (`deleteDialogOpen` / `pendingDelete`,
 `guard.open` / `guard.pending`). Do not merge them back.
 
+**A tile's `<img>` is the photograph, not the square it sits in.** The square — `aspect-square` on the
+frame — is what lines a row up, and every photo is centred inside it in a box sized from the image's
+own ratio, so the `<img>` box _is_ the picture as drawn. Two things read that: the selection border,
+which traces the photo rather than the letterboxing beside it, and `getTileRect`, which hands the
+rect to `useLargeViewTransition` as the origin the large view zooms out of. Putting `size-full` back
+on the `<img>` restores the square and breaks both — the border boxes in empty space, and the zoom
+starts at the wrong width for every photo that is taller than it is wide. Nothing outside
+`ImageTile.browser.test.ts` fails when it does.
+
 **A dragged tile never leaves its cell.** `ImageTile`'s root is the grid cell and stays put — it is
 the dashed drop placeholder — while a card _inside_ it carries the transform following the cursor,
 and `useTileDrag` measures the root for that offset. Moving the transform onto the root brings back
