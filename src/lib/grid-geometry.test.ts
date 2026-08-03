@@ -6,6 +6,8 @@ import {
   indexToCell,
   moveSelection,
   reorder,
+  stopIndexFor,
+  tileSizeStops,
 } from "./grid-geometry";
 
 describe("columnCount", () => {
@@ -46,6 +48,85 @@ describe("cellWidthFor", () => {
 
   it("ignores the minimum once the columns are wider than it", () => {
     expect(cellWidthFor(430, 4, 10, 80)).toBe(100);
+  });
+});
+
+describe("tileSizeStops", () => {
+  it("offers one size per column count, ascending", () => {
+    // 430 wide with a 10px gap: 1 column of 430, 2 of 210, 3 of 136, 4 of 100.
+    expect(tileSizeStops(430, 10, 80, 480)).toEqual([100, 136, 210, 430]);
+  });
+
+  it("gives each stop the width its columns are really given", () => {
+    for (const size of tileSizeStops(1000, 16, 80, 480)) {
+      const columns = columnCount(1000, size, 16);
+      expect(Math.floor(cellWidthFor(1000, columns, 16))).toBe(size);
+    }
+  });
+
+  it("lands every stop on a column count of its own", () => {
+    const counts = tileSizeStops(1280, 16, 80, 480).map((size) => columnCount(1280, size, 16));
+
+    expect(new Set(counts).size).toBe(counts.length);
+  });
+
+  it("drops the sizes outside the slider's range", () => {
+    const stops = tileSizeStops(2000, 16, 80, 480);
+
+    expect(Math.min(...stops)).toBeGreaterThanOrEqual(80);
+    expect(Math.max(...stops)).toBeLessThanOrEqual(480);
+  });
+
+  it("has nothing to offer for a width it has not measured yet", () => {
+    expect(tileSizeStops(0, 16, 80, 480)).toEqual([]);
+    expect(tileSizeStops(-100, 16, 80, 480)).toEqual([]);
+  });
+
+  it("has nothing to offer for a container narrower than the smallest tile", () => {
+    expect(tileSizeStops(60, 16, 80, 480)).toEqual([]);
+  });
+});
+
+describe("stopIndexFor", () => {
+  const stops = [100, 136, 210, 430];
+
+  it("finds the stop a size is already sitting on", () => {
+    expect(stopIndexFor(stops, 136)).toBe(1);
+  });
+
+  it("reads a size between two stops the way the grid does", () => {
+    // 200px still leaves room for 210px columns, so it draws as the 210 stop.
+    expect(stopIndexFor(stops, 200)).toBe(2);
+    expect(stopIndexFor(stops, 101)).toBe(1);
+  });
+
+  it("pins a size beyond the widest stop to the end", () => {
+    expect(stopIndexFor(stops, 480)).toBe(3);
+  });
+
+  it("pins a size below the narrowest stop to the start", () => {
+    expect(stopIndexFor(stops, 80)).toBe(0);
+  });
+
+  it("agrees with the column count the size would produce", () => {
+    const width = 1280;
+    const stopsHere = tileSizeStops(width, 16, 80, 640);
+
+    for (const size of [80, 97, 160, 233, 300, 480]) {
+      const index = stopIndexFor(stopsHere, size);
+
+      expect(columnCount(width, stopsHere[index]!, 16)).toBe(columnCount(width, size, 16));
+    }
+  });
+
+  it("settles for the widest stop when the size outruns every one of them", () => {
+    // A single column is off the list, so a size that would produce one has no
+    // stop of its own and takes the closest thing on offer.
+    const width = 1280;
+    const stopsHere = tileSizeStops(width, 16, 80, 640);
+
+    expect(columnCount(width, 900, 16)).toBe(1);
+    expect(stopIndexFor(stopsHere, 900)).toBe(stopsHere.length - 1);
   });
 });
 

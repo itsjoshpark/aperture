@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { cellWidthFor, columnCount } from "./grid-geometry";
+import { cellWidthFor, columnCount, tileSizeStops } from "./grid-geometry";
 
 /**
  * `columnCount` reimplements a decision the browser makes: how many tracks
@@ -45,7 +45,7 @@ afterEach(() => {
 
 describe("columnCount against real CSS grid layout", () => {
   const widths = [200, 320, 400, 430, 500, 539, 540, 700, 861, 1000, 1280, 1600];
-  const tileSizes = [80, 120, 160, 240, 320];
+  const tileSizes = [80, 120, 160, 240, 320, 480, 640];
 
   for (const minTile of tileSizes) {
     for (const width of widths) {
@@ -55,6 +55,43 @@ describe("columnCount against real CSS grid layout", () => {
         expect(columnCount(width, minTile, GAP)).toBe(renderedColumns(grid));
       });
     }
+  }
+});
+
+/**
+ * The size slider offers these and nothing else, so a stop that draws the same
+ * as its neighbour is a tick that does nothing when you drag past it — which is
+ * the whole reason the list exists.
+ */
+describe("tileSizeStops against real CSS grid layout", () => {
+  const MIN = 80;
+  const MAX = 640;
+
+  for (const width of [430, 700, 1000, 1280, 1600]) {
+    it(`offers only sizes that draw differently at ${width}px wide`, () => {
+      const stops = tileSizeStops(width, GAP, MIN, MAX);
+      expect(stops.length).toBeGreaterThan(1);
+
+      const drawn = stops.map((size) => {
+        const grid = renderGrid(width, size, 40);
+        return (grid.children[0] as HTMLElement).getBoundingClientRect().width;
+      });
+
+      expect(new Set(drawn).size).toBe(stops.length);
+    });
+
+    it(`draws each stop at the size it advertises at ${width}px wide`, () => {
+      for (const size of tileSizeStops(width, GAP, MIN, MAX)) {
+        const grid = renderGrid(width, size, 40);
+        const actual = (grid.children[0] as HTMLElement).getBoundingClientRect().width;
+
+        // The stop is the track width floored, so the track is that wide or up
+        // to a pixel wider — never narrower, which would be a size on the
+        // slider you cannot actually get.
+        expect(actual).toBeGreaterThanOrEqual(size);
+        expect(actual).toBeLessThan(size + 1);
+      }
+    });
   }
 });
 

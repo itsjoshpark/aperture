@@ -48,6 +48,47 @@ export function cellWidthFor(
   return Math.max((containerWidth - gap * (columns - 1)) / columns, minTileWidth);
 }
 
+/**
+ * The tile sizes that draw differently, ascending.
+ *
+ * `minmax(tile, 1fr)` stretches the tracks to fill the row, so what lands on
+ * screen changes only when the column count does — every size between two
+ * counts renders identically, which is a slider whose middle does nothing. Each
+ * stop is the width its columns are actually given, so setting one asks for a
+ * size the grid can honour exactly.
+ */
+export function tileSizeStops(
+  containerWidth: number,
+  gap: number,
+  minSize: number,
+  maxSize: number,
+): number[] {
+  if (containerWidth <= 0 || minSize <= 0) return [];
+
+  const stops: number[] = [];
+  for (let columns = 1; ; columns += 1) {
+    // Floor rather than round: a stop wider than the track it came from would
+    // fall into the column count below and stop being its own step.
+    const size = Math.floor(cellWidthFor(containerWidth, columns, gap));
+    if (size < minSize) break;
+    if (size <= maxSize && size !== stops.at(-1)) stops.push(size);
+  }
+  return stops.reverse();
+}
+
+/**
+ * Which stop the grid is drawing at for a given size.
+ *
+ * A size is rendered at the narrowest stop that reaches it — that is the same
+ * `floor((width + gap) / (size + gap))` the browser applies, read off the list
+ * — so a size restored from an earlier session, or from a window of another
+ * width, still puts the thumb where the eye says it should be.
+ */
+export function stopIndexFor(stops: number[], size: number): number {
+  const index = stops.findIndex((stop) => stop >= size);
+  return index === -1 ? stops.length - 1 : index;
+}
+
 export function indexToCell(index: number, columns: number): { row: number; column: number } {
   return { row: Math.floor(index / columns), column: index % columns };
 }

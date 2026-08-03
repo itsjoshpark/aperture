@@ -230,20 +230,77 @@ test.describe("delete", () => {
   });
 });
 
+/** The page's own globals, described rather than imported: see `ApertureTestHooks`. */
+interface FlipProbe {
+  document: {
+    querySelectorAll: (selector: string) => Iterable<{
+      getAnimations: () => { id: string }[];
+      matches: (selector: string) => boolean;
+    }>;
+  };
+  requestAnimationFrame: (callback: () => void) => void;
+}
+
 test.describe("preview size", () => {
   const sizeSlider = (page: Page) => page.getByRole("slider", { name: "Preview size" });
 
-  test("resizes the previews with the slider", async ({ page }) => {
+  /**
+   * Every step has to redraw, not just the journey as a whole: the grid
+   * stretches its columns to fill the row, so a slider measured in pixels
+   * spends most of its travel showing the same picture back.
+   */
+  test("resizes the previews on every step of the slider", async ({ page }) => {
     await openGallery(page);
 
     const first = tile(page, "beach.jpg");
-    const before = (await first.boundingBox())!.width;
+    let previous = (await first.boundingBox())!.width;
+
+    for (let step = 0; step < 3; step += 1) {
+      await sizeSlider(page).press("ArrowRight");
+      await expect
+        .poll(async () => (await first.boundingBox())!.width)
+        .not.toBeCloseTo(previous, 0);
+
+      previous = (await first.boundingBox())!.width;
+    }
+  });
+
+  /**
+   * The animation itself is covered in `tile-flip.browser.test.ts`; what only
+   * the whole app can show is that it is wired to the slider at all, and that
+   * the tiles are handed back at the end rather than left under a transform.
+   */
+  test("grows the tiles into their new size, and leaves nothing behind", async ({ page }) => {
+    await openGallery(page);
+
+    // Sampled from inside the page: an animation lasts 260ms, which a round
+    // trip per frame would spend most of and could miss the whole of.
+    const zoomed = page.evaluate(async () => {
+      const { document, requestAnimationFrame } = globalThis as unknown as FlipProbe;
+      for (let frame = 0; frame < 40; frame += 1) {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+        const running = [...document.querySelectorAll("[data-tile-card]")].some((card) =>
+          card.getAnimations().some((animation) => animation.id === "tile-flip"),
+        );
+        if (running) return true;
+      }
+      return false;
+    });
 
     await sizeSlider(page).press("ArrowRight");
-    await sizeSlider(page).press("ArrowRight");
-    await sizeSlider(page).press("ArrowRight");
+    expect(await zoomed).toBe(true);
 
-    await expect.poll(async () => (await first.boundingBox())!.width).not.toBeCloseTo(before, 0);
+    // Settled, the card fills its cell exactly: any transform left over from
+    // the FLIP would show up as an offset or a width that does not match.
+    const cell = page.getByRole("gridcell").first();
+    const card = page.locator("[data-tile-card]").first();
+    await expect
+      .poll(async () => {
+        const outer = (await cell.boundingBox())!;
+        const inner = (await card.boundingBox())!;
+        return Math.round(Math.abs(outer.x - inner.x) + Math.abs(outer.width - inner.width));
+      })
+      .toBe(0);
   });
 
   /**
@@ -258,6 +315,7 @@ test.describe("preview size", () => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
     await expect(selected(page)).toHaveText(/a\.jpg/);
 
+    const before = await sizeSlider(page).getAttribute("aria-valuenow");
     const thumb = (await sizeSlider(page).boundingBox())!;
     await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
     await page.mouse.down();
@@ -265,7 +323,7 @@ test.describe("preview size", () => {
     await page.mouse.up();
 
     // The drag has to have done something, or focus proves nothing.
-    await expect(sizeSlider(page)).not.toHaveAttribute("aria-valuenow", "160");
+    await expect(sizeSlider(page)).not.toHaveAttribute("aria-valuenow", before!);
 
     await page.keyboard.press("ArrowRight");
     await expect(selected(page)).toHaveText(/b\.jpg/);
@@ -274,10 +332,11 @@ test.describe("preview size", () => {
   test("remembers the size across a reload", async ({ page }) => {
     await openGallery(page);
 
+    const initial = await sizeSlider(page).getAttribute("aria-valuenow");
     await sizeSlider(page).press("ArrowRight");
     await sizeSlider(page).press("ArrowRight");
     const chosen = await sizeSlider(page).getAttribute("aria-valuenow");
-    expect(chosen).not.toBe("160");
+    expect(chosen).not.toBe(initial);
 
     await page.reload();
     await page.getByRole("button", { name: "Open folder…" }).click();
@@ -288,6 +347,41 @@ test.describe("preview size", () => {
 });
 
 test.describe("rename", () => {
+  /**
+   * The tiles a drag pushes aside slide into their new cells — but never the
+   * lifted card, which belongs to the cursor for as long as the button is down.
+   * Watched from inside the page: each of these lasts 260ms.
+   */
+  test("slides the tiles a dragged one displaces, and never the dragged one", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+
+    const watching = page.evaluate(async () => {
+      const { document, requestAnimationFrame } = globalThis as unknown as FlipProbe;
+      const seen = { displaced: false, lifted: false };
+
+      for (let frame = 0; frame < 90; frame += 1) {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+        for (const card of document.querySelectorAll("[data-tile-card]")) {
+          if (!card.getAnimations().some((animation) => animation.id === "tile-flip")) continue;
+          if (card.matches("[data-dragging]")) seen.lifted = true;
+          else seen.displaced = true;
+        }
+      }
+      return seen;
+    });
+
+    const source = tile(page, "d.jpg");
+    const target = tile(page, "a.jpg");
+    await source.hover();
+    await page.mouse.down();
+    const box = (await target.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 6 });
+    await page.mouse.up();
+
+    expect(await watching).toEqual({ displaced: true, lifted: false });
+    await expect(page.getByRole("gridcell")).toHaveText([/d\.jpg/, /a\.jpg/, /b\.jpg/, /c\.jpg/]);
+  });
+
   test("renames in the dragged order, then undoes it", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 

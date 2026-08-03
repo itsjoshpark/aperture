@@ -3,7 +3,9 @@ import { useResizeObserver } from "@vueuse/core";
 import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import { useAperture } from "@/composables/useAperture";
 import { useTileDrag } from "@/composables/useTileDrag";
-import { cellWidthFor, columnCount, type GridMetrics } from "@/lib/grid-geometry";
+import { MAX_TILE_SIZE, MIN_TILE_SIZE } from "@/composables/useGallery";
+import { cellWidthFor, columnCount, type GridMetrics, tileSizeStops } from "@/lib/grid-geometry";
+import { captureTiles, flipTiles, TILE_FLIP_DURATION } from "@/lib/tile-flip";
 import ImageTile from "./ImageTile.vue";
 
 const aperture = useAperture();
@@ -32,6 +34,28 @@ watch(
   },
   { immediate: true },
 );
+
+// Which sizes are worth offering depends on the width alone, not on the size
+// currently chosen.
+watch(
+  width,
+  () => {
+    aperture.sizeStops.value = tileSizeStops(width.value, GAP, MIN_TILE_SIZE, MAX_TILE_SIZE);
+  },
+  { immediate: true },
+);
+
+/** Measure, let the change land, then animate the difference away. */
+async function flipThrough(change?: () => void): Promise<void> {
+  const before = captureTiles(grid.value, scroller.value);
+  change?.();
+  await nextTick();
+  flipTiles(before, aperture.motion.duration(TILE_FLIP_DURATION));
+}
+
+// No change to make here: the watcher already runs before the DOM has taken the
+// new size, which is the only moment the old one can be measured.
+watch(gallery.tileSize, () => void flipThrough());
 
 const metrics = (): GridMetrics => {
   const columns = aperture.columns.value;
@@ -62,8 +86,17 @@ const drag = useTileDrag({
     if (entry) gallery.select(entry.name);
     await nextTick();
   },
-  onMove: (from, to) => rename.move(from, to),
+  // The tiles the dragged one displaces slide out of its way; the dragged card
+  // itself is under the cursor and is left alone.
+  onMove: (from, to) => void flipThrough(() => rename.move(from, to)),
   onCancel: () => rename.cancel(),
+});
+
+// Dropping a tile lands it wherever the cursor left it, which is not where its
+// cell is. This watcher runs before the release reaches the DOM, so the card is
+// still lifted when it is measured and settled by the time it is animated.
+watch(drag.dragging, (lifted) => {
+  if (!lifted) void flipThrough();
 });
 
 /**
@@ -117,7 +150,13 @@ defineExpose({ scroller, getTileRect });
 </script>
 
 <template>
-  <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+  <!--
+    `overflow-x-hidden` because a transform counts towards scrollable overflow:
+    zooming out starts the right-hand cards wider than the cells they are
+    shrinking into, and a horizontal scrollbar that appears for 260ms and then
+    leaves takes the whole grid with it, twice.
+  -->
+  <div ref="scroller" class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
     <TransitionGroup
       ref="gridRoot"
       tag="div"
@@ -149,10 +188,10 @@ defineExpose({ scroller, getTileRect });
 
 <style scoped>
 /*
- * Vue's TransitionGroup applies FLIP transforms to the `move` class, which means
- * one rule animates every layout change the grid can undergo: reordering during
- * a drag, re-sorting, resizing tiles, and closing the gap left by a deleted
- * file. Nothing here is per-case.
+ * Vue's TransitionGroup is supposed to FLIP the cells under this class whenever
+ * the grid relays. In practice it does not fire — not on a re-sort, not on a
+ * resize, not on a drag — which is why `tile-flip.ts` measures and animates the
+ * tiles itself.
  */
 .tile-move {
   transition: transform var(--motion-slow) var(--motion-ease);

@@ -154,10 +154,11 @@ defineExpose({
     so it doubles as the drop placeholder, and `z-20` on it is what floats the
     lifted card over the neighbouring tiles.
 
-    `transition: none` while dragging is load-bearing: a drag reorders the grid
-    under us, and without it the placeholder would FLIP-animate to its new cell
-    over `--motion-slow` while the card's offset — measured against this element
-    — drifted under the cursor for the whole of it.
+    `transition: none` while dragging keeps this cell instant. Nothing animates
+    it today — `TransitionGroup`'s move transition does not fire, which is why
+    `tile-flip.ts` exists — but anything that did would be animating the very
+    element the card's offset is measured against, and the card would drift
+    under the cursor for as long as it ran.
   -->
   <div
     ref="root"
@@ -198,10 +199,17 @@ defineExpose({
       drag can offset it without moving the cell it is being dragged out of.
     -->
     <div
+      data-tile-card
+      :data-dragging="dragging || undefined"
       :class="
         cn(
           'relative flex flex-col rounded-sm',
           'transition-[box-shadow] duration-(--motion-fast) ease-(--motion-ease)',
+          // `flipTiles` animates this element — from the size the tile was, and
+          // from the cell it was in — so it needs a corner to pivot on. The
+          // cell itself never moves under it, which is what leaves it free to
+          // be the drop placeholder.
+          'origin-top-left',
           // A lifted tile is the one time it needs a surface. Bare, it is
           // transparent everywhere but the photo, so the tile it is dragged over
           // shows through the caption — and it reads as a photo sliding around

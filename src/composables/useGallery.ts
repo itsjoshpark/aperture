@@ -6,8 +6,15 @@ import { findLeftoverTempNames } from "@/lib/rename-engine";
 import { DEFAULT_SORT, sortEntries, type SortOrder } from "@/lib/sort";
 import { ThumbnailCache } from "@/lib/thumbnails";
 
+/**
+ * The bounds on how wide a tile is *drawn*, not on the `minmax()` floor that
+ * asks for it — the grid stretches its tracks to fill the row, so a 480px floor
+ * draws as 632px whenever the width leaves two columns. `tileSizeStops` reads
+ * these as the range it may offer, which is what keeps the number on the slider
+ * and the picture on screen the same number.
+ */
 export const MIN_TILE_SIZE = 80;
-export const MAX_TILE_SIZE = 320;
+export const MAX_TILE_SIZE = 640;
 export const DEFAULT_TILE_SIZE = 160;
 
 /** Preview size is a preference about your eyes and your screen, not about a

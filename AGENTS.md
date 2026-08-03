@@ -39,7 +39,8 @@ src/
     rename-engine.ts executes a plan against a FileSystemPort
     exif.ts          PURE (bar one Blob read): the date a photo was taken
     sort.ts          natural-name + date comparators
-    grid-geometry.ts PURE: width/gap -> columns, index<->cell, pointer hit-test
+    grid-geometry.ts PURE: width/gap -> columns + size stops, index<->cell, hit-test
+    tile-flip.ts     the FLIP the tiles resize and reorder under (measures the DOM)
     preview/         turning a file into something an <img> can show
       renderer.ts         plain object URL, or the HEIC decoder
       heic-decoder.ts     worker pool + queue in front of libheif
@@ -157,6 +158,29 @@ draggable; if it still holds focus on pointerup the arrow keys stay aimed at the
 mouse gets you back to the gallery. `SizeSlider` blurs on `pointerup` only — never on keydown, so
 Tab-ing to it still works — and `useKeyboard` ignores keys aimed at `role="slider"`, or one arrow
 press would resize _and_ move the selection.
+
+**The size slider moves between column counts, not pixels.** `minmax(tile, 1fr)` stretches the tracks
+to fill the row, so the picture changes only when the column count does, and a slider measured in
+pixels spends most of its travel redrawing the same thing. `tileSizeStops` derives one size per
+achievable count — each the width that count's tracks are really given — and `SizeSlider` is an index
+into that list. So `MIN`/`MAX_TILE_SIZE` bound the tile as _drawn_, not the `minmax()` floor asking
+for it: a 480px floor draws as 632px wherever the width leaves room for two columns. The stops depend
+on the container width, so `GalleryGrid` publishes them alongside `columns` from its resize observer.
+
+**`TransitionGroup`'s move transition does not fire, so the grid FLIPs itself.** `.tile-move` is
+defined and the class resolves against a cell — but Vue never applies it, on a re-sort or a resize or
+a drag, and the tiles jump. `tile-flip.ts` measures every card before the change and animates the
+difference away after, which a move transition could not have done for the resize in any case: a FLIP
+only translates, and half of that one is the tiles changing size. Three things it is easy to undo:
+
+- **The card moves, never the cell.** The cell is the grid track and is already where the grid wants
+  it, which is also what leaves it free to be the drop placeholder.
+- **The lifted card is skipped at animate time, not at capture time** — while a drag is running the
+  cursor owns it, but the moment the button comes up that same measurement is what settles it into
+  its cell. `GalleryGrid` watches `drag.dragging` for exactly that, before the release reaches the
+  DOM.
+- **The scroller is `overflow-x-hidden`.** A transform counts towards scrollable overflow, and cards
+  mid-shrink are wider than the cells they are shrinking into.
 
 **`Cmd`/`Ctrl` + `O` sits above the rest of the key map, deliberately.** `useKeyboard` returns early
 when there is no folder, so inside the `switch` the chord would work only once a folder was already
