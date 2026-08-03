@@ -31,9 +31,11 @@ browser's File System Access API, so your photos never leave your machine.
 | `Space`                | open large view            | back to the grid      |
 | `Delete`               | confirm, then delete       | confirm, then delete  |
 | `Cmd`/`Ctrl` + `←` `→` | reorder the selected image | —                     |
+| `Cmd`/`Ctrl` + `O`     | open a folder              | open a folder         |
 | `Esc`                  | leave rename mode          | back to the grid      |
 
-`Esc` never clears your selection.
+`Esc` never clears your selection. `Cmd`/`Ctrl` + `O` also works on the opening screen, before there
+is a folder to browse.
 
 ## Requirements
 

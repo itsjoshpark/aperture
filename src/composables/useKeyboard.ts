@@ -12,6 +12,21 @@ import type { Aperture } from "./useAperture";
  */
 export function useKeyboard(aperture: Aperture) {
   useEventListener(window, "keydown", (event: KeyboardEvent) => {
+    // Opening a folder is the one binding that predates having one, so it is
+    // handled ahead of every guard below — including `handlesItsOwnKeys`, since
+    // unlike the arrows and Backspace this chord means nothing inside a text
+    // field, and Chrome's own Cmd+O is not a useful thing to fall through to.
+    if (isOpenFolderChord(event) && aperture.supported && !aperture.busy.value) {
+      // Claimed before the bail-outs, so a modal never leaks the key to Chrome.
+      event.preventDefault();
+      if (aperture.deleteDialogOpen.value || aperture.guard.open.value) return;
+      if (aperture.rename.applying.value) return;
+      // Nothing may be awaited first: `showDirectoryPicker()` needs the user
+      // activation this keydown carries, and the path to it is synchronous.
+      void aperture.openFolder();
+      return;
+    }
+
     if (!aperture.hasFolder.value) return;
     // Never steal keys from a control that has its own, or from an open dialog.
     if (handlesItsOwnKeys(event.target) || aperture.deleteDialogOpen.value) return;
@@ -94,6 +109,21 @@ function reorderSelected(aperture: Aperture, delta: number): void {
 
   const to = Math.min(Math.max(from + delta, 0), aperture.displayed.value.length - 1);
   if (to !== from) aperture.rename.move(from, to);
+}
+
+/**
+ * `Cmd`/`Ctrl` + `O`, and nothing adjacent to it: `Shift` and `Alt` are left
+ * free for whatever the browser or the OS has bound there, and a held key must
+ * not queue a second picker behind the first.
+ */
+function isOpenFolderChord(event: KeyboardEvent): boolean {
+  return (
+    (event.metaKey || event.ctrlKey) &&
+    !event.shiftKey &&
+    !event.altKey &&
+    !event.repeat &&
+    event.key.toLowerCase() === "o"
+  );
 }
 
 /**
