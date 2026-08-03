@@ -1,15 +1,14 @@
 # Aperture
 
 A local image gallery in the browser. Point it at a folder, browse it Finder-style, delete what you
-don't want, and drag the keepers into an order — Aperture then rewrites the filenames to match that
-order, sequentially.
+don't want, drag the keepers into an order — Aperture rewrites the filenames to match that order.
 
 Static SPA, deployed to <https://joshuapark.dev/aperture>.
 
 ## Commands
 
-Package manager is **pnpm** (pinned via `packageManager`). The toolchain is **Vite+**, whose CLI is
-`vp` — it wraps Vite, Vitest, Oxlint, Oxfmt and Rolldown.
+pnpm (pinned via `packageManager`), driving **Vite+** — the `vp` CLI wrapping Vite, Vitest, Oxlint,
+Oxfmt and Rolldown.
 
 | Command      | What it does                                   |
 | ------------ | ---------------------------------------------- |
@@ -19,10 +18,9 @@ Package manager is **pnpm** (pinned via `packageManager`). The toolchain is **Vi
 | `pnpm build` | `vue-tsc -b` then production build             |
 | `pnpm e2e`   | Playwright smoke suite                         |
 
-`.vite-hooks/pre-commit` runs `vp check --fix` on staged files.
-
-> If `vp` ever misbehaves (it is at 0.2.x), the npm scripts are thin wrappers — swap their bodies
-> for `vite` / `vitest` / `oxlint` directly. No application code depends on Vite+.
+`.vite-hooks/pre-commit` runs `vp check --fix` on staged files. The scripts are thin wrappers, so if
+`vp` misbehaves (it is at 0.2.x) swap their bodies for `vite` / `vitest` / `oxlint` — no application
+code depends on Vite+.
 
 ## Layout
 
@@ -31,206 +29,182 @@ src/
   main.ts          production entry: real disk
   mount.ts         builds the app around an Aperture instance
   lib/
-    fs/            the ONLY code that touches disk (see below)
-      types.ts         FileSystemPort — the seam everything else is written against
-      fsa-adapter.ts   File System Access implementation
+    fs/            the ONLY code that touches disk
+      types.ts            FileSystemPort — the seam everything else is written against
+      fsa-adapter.ts      File System Access implementation
       memory-adapter.ts   in-memory fake (tests + harness only)
       fixtures.ts         real PNG/HEIC bytes (tests + harness only)
       folder-source.ts    where folders come from; swapped by the harness
-    naming.ts          PURE: filename planning + validation
-    rename-engine.ts   executes a plan against a FileSystemPort
-    sort.ts            natural-name + date comparators
-    grid-geometry.ts   PURE: width/gap -> columns, index<->cell, pointer hit-test
-    preview/           turning a file into something an <img> can show
-      renderer.ts        picks the path: plain object URL, or the HEIC decoder
-      heic-decoder.ts    worker pool + queue in front of libheif
-      heic-worker.ts     the only import of `heic-decode`; decode -> resize -> JPEG
-      protocol.ts        the worker message types, importable without libheif
-      preview-format.ts  size and quality of a decoded preview
-    thumbnails.ts      object-URL LRU cache, capped by count and by bytes
-    file-names.ts      PURE: split base/extension, recognise images, flag undrawable ones
+    naming.ts        PURE: filename planning + validation
+    rename-engine.ts executes a plan against a FileSystemPort
+    sort.ts          natural-name + date comparators
+    grid-geometry.ts PURE: width/gap -> columns, index<->cell, pointer hit-test
+    preview/         turning a file into something an <img> can show
+      renderer.ts         plain object URL, or the HEIC decoder
+      heic-decoder.ts     worker pool + queue in front of libheif
+      heic-worker.ts      the only import of `heic-decode`; decode -> resize -> JPEG
+      protocol.ts         worker message types, importable without libheif
+      preview-format.ts   size and quality of a decoded preview
+    thumbnails.ts    object-URL LRU cache, capped by count and by bytes
+    file-names.ts    PURE: base/extension, recognise images, flag undrawable ones
   composables/
-    useAperture.ts     the store; provided at app level, injected everywhere
-    useGallery.ts      entries, sort, selection, delete
-    useRenameSession.ts   draft order, affixes, apply/undo
-    useTileDrag.ts     Pointer Events drag-reorder, no library
-    useKeyboard.ts     the whole key map
-    useUnsavedGuard.ts    beforeunload + the in-app discard dialog
-  components/
-    ui/            shadcn-vue primitives — see the note under Testing
+    useAperture.ts       the store; provided at app level, injected everywhere
+    useGallery.ts        entries, sort, selection, delete
+    useRenameSession.ts  draft order, affixes, apply/undo
+    useTileDrag.ts       Pointer Events drag-reorder, no library
+    useKeyboard.ts       the whole key map
+    useUnsavedGuard.ts   beforeunload + the in-app discard dialog
+  components/ui/   shadcn-vue primitives — see the note under Testing
 e2e/               Playwright specs + a test-only harness entry
 ```
 
-State lives in one place. `createAperture()` composes the gallery, the rename
-session and the guard; `mount.ts` provides it at the app level and every
-component reaches it with `useAperture()`. `App.vue` takes no props and is
-identical in production and under test — the entry point decides where folders
-come from by passing a different `FolderSource`.
+State lives in one place: `createAperture()` composes the gallery, the rename session and the guard,
+`mount.ts` provides it at app level, every component reaches it with `useAperture()`. `App.vue` takes
+no props and is identical in production and under test — the entry point decides where folders come
+from by passing a different `FolderSource`.
 
 ## Things that will bite you
 
-**The File System Access API is Chromium-only.** Safari and Firefox get
-`UnsupportedBrowser.vue`. There is deliberately no demo mode.
+### Disk, deleting, renaming
 
-**You cannot rename a local file directly.** `FileSystemHandle.move()` is shipped only for OPFS
-files; for anything from `showDirectoryPicker()` it is behind a Chrome flag. `fsa-adapter.ts` tries
-`move()` and falls back to copy-then-delete. Consequence: **renaming resets date-modified**, because
-the bytes are rewritten. File contents (and EXIF) are unchanged. The UI says so; keep it saying so.
+**The File System Access API is Chromium-only.** Safari and Firefox get `UnsupportedBrowser.vue`.
+There is deliberately no demo mode.
 
-**Deleting is permanent.** `removeEntry()` does not move anything to the Trash. Dialog copy must
-never imply otherwise.
+**You cannot rename a local file directly.** `move()` ships only for OPFS; elsewhere it is behind a
+Chrome flag, so `fsa-adapter.ts` falls back to copy-then-delete. Consequence: **renaming resets
+date-modified**, though contents and EXIF are untouched. The UI says so; keep it saying so.
 
-**Renaming must be two-phase.** A naive in-order rename destroys data whenever a target name is
-currently held by another file in the set (`b.jpg → 1.jpg` while `1.jpg` still exists). Every file
-goes to a `.aperture-tmp-*` name first, then to its target. Do not "optimise" this away.
+**Deleting is permanent.** `removeEntry()` does not use the Trash. Dialog copy must never imply it
+does.
+
+**Renaming must be two-phase.** A naive in-order rename destroys data whenever a target name is held
+by another file in the set (`b.jpg → 1.jpg` while `1.jpg` exists). Every file goes to a
+`.aperture-tmp-*` name first, then to its target. Do not "optimise" this away.
 
 **Nothing is remembered between sessions, deliberately.** A directory handle survives a reload but
-its permission does not — it dies with the last tab of the origin, and `requestPermission()` only
-works inside a user gesture. Restoring a folder therefore still costs a click and a prompt, which is
-not enough better than picking it again to justify keeping handles in IndexedDB. Every session
-starts at the picker. `FileSystemPort.ensurePermission()` still exists for adapters that need it,
-but nothing in the app calls it: `showDirectoryPicker()` is asked for `readwrite` up front.
+its permission does not, and `requestPermission()` only works inside a user gesture — so restoring a
+folder still costs a click and a prompt, which is not enough better than picking it again to justify
+keeping handles in IndexedDB. `FileSystemPort.ensurePermission()` exists for adapters that need it,
+but nothing calls it: `showDirectoryPicker()` asks for `readwrite` up front.
 
-**Chrome cannot draw every format it will happily list**, and a photo frame with nothing in it is
-indistinguishable from a broken app. Three separate mechanisms cover that, and **any new surface that
-shows a photo needs all three**:
-
-- `isPreviewable()` in `file-names.ts` — the denylist of formats not worth attempting. `.tif`/`.tiff`
-  only; render the "No preview" fallback instead of an `<img>`.
-- An `@error` handler on the `<img>` — for corrupt files and formats nobody thought of. The denylist
-  is a denylist, so anything unrecognised is attempted and lands here.
-- A `try`/`catch` around `cache.acquire()` and a pending state. `acquire()` rejects on a HEIC libheif
-  will not read, and an unhandled rejection leaves the frame blank forever — the exact failure the
-  other two exist to prevent.
-
-**HEIC is decoded by us, not by Chrome.** No browser licenses HEVC, and an iPhone camera roll is
-mostly HEIC, so `lib/preview/` runs libheif in a worker pool: decode, downscale to 2048px, re-encode
-as JPEG. It costs ~600ms of CPU and 46 MB of transient RGBA per 12 MP photo, which is why it is
-queued, cancellable and off the main thread — and why the tile shimmers while it waits. `heic-decode`
-is imported from `heic-worker.ts` and nowhere else; importing it anywhere on the main thread puts a
-megabyte of wasm in the entry chunk.
-
-**`heic-decode` must stay in `optimizeDeps.include`.** It is 1.5 MB of CommonJS with the wasm inlined
-as base64. Without pre-bundling, Vite transforms it on first request instead of at startup, and the
-first HEIC after a cold `pnpm dev` blocks for over a minute — 84ms with it. Production builds are
-unaffected either way; this is purely a dev-server trap.
-
-**`ThumbnailCache` is capped twice.** A pass-through object URL is a handle onto a file and costs no
-memory; a decoded HEIC preview is a JPEG we are actually holding. Renderers report `bytes` so the
-byte budget can evict the second kind without punishing the first. Callers must pair every
-`acquire()` with exactly one `release()` — including when it rejects, and including when they give up
-before it settles, which is what cancels a decode nobody is waiting for any more.
-
-**The size slider must not keep focus.** Reka focuses the thumb on pointerdown, as it must to be
-draggable; if it still holds focus on pointerup the arrow keys stay pointed at the slider and there
-is no way back to the gallery but the mouse. `SizeSlider` blurs on `pointerup` only — never on
-keydown — so Tab-ing to it still works. `useKeyboard` correspondingly ignores keys aimed at
-`role="slider"`, or one arrow press would resize _and_ move the selection.
-
-**`Cmd`/`Ctrl` + `O` sits above the rest of the key map, deliberately.** `useKeyboard` opens with
-`if (!aperture.hasFolder.value) return;`, so the landing screen has no key map at all — moving the
-open-folder chord down into the `switch` would leave it working only once a folder is already open,
-which is the half that matters least. It also runs ahead of `handlesItsOwnKeys`, because unlike the
-arrows it means nothing inside a text field. And nothing may be awaited before `openFolder()`:
-`showDirectoryPicker()` needs the user activation the keydown carries, and `openFolder` →
-`guard.attempt` → `source.open()` is a synchronous chain that has to stay one.
-
-**`memory-adapter.ts` and `fixtures.ts` must never be reachable from `src/main.ts`.** They are the
-in-memory fake and its image bytes for tests and the e2e harness, which has its own HTML entry;
-keeping them out of the production entry graph is what keeps them out of the bundle.
-`grep MemoryAdapter dist/assets/*.js` should find nothing.
-
-**Assets must go through Vite.** `base` is `/aperture/`, so a hardcoded leading-slash URL will 404
-in production.
-
-**Dialogs close themselves before your click handler runs.** Reka's `AlertDialogAction` dismisses
-the dialog as part of handling the click, so any state you clear in the "dialog closed" path is gone
-by the time the confirm handler looks for it — the confirm silently does nothing. Both dialogs
-therefore track _whether they are open_ separately from _what they are about_
-(`deleteDialogOpen` / `pendingDelete`, `guard.open` / `guard.pending`). Do not merge them back.
-
-**A rename session stays open after applying**, with its button switched to Undo. That means the
-draft is holding `ImageEntry` objects whose names no longer exist, so `apply()` re-materialises it
-against the refreshed listing. Anything that keeps the session alive across a disk change has to do
-the same.
+**A rename session stays open after applying**, with its button switched to Undo — so the draft holds
+`ImageEntry` objects whose names no longer exist, and `apply()` re-materialises it against the
+refreshed listing. Anything keeping a session alive across a disk change must do the same.
 
 **The folder's name list has exactly one owner.** `gallery.allNames` — every name in the folder,
-images or not — is what rename mode checks its targets against, and a session outlives changes to
-the folder. It used to be copied into the session at `begin()`, which meant deleting a file left the
-bar refusing to write a name nothing held any more, with no way out but restarting the session. Any
-new operation that changes what is in the folder has to update `allNames`, the way `remove()` and
-`refresh()` do.
+images or not — is what rename mode checks targets against, and a session outlives changes to the
+folder. Copying it into the session at `begin()` meant deleting a file left the bar refusing a name
+nothing held any more, with no way out but restarting. Any operation that changes folder contents
+must update `allNames`, the way `remove()` and `refresh()` do.
+
+### Previews
+
+**Chrome cannot draw every format it will happily list**, and an empty photo frame is
+indistinguishable from a broken app. **Any new surface showing a photo needs all three** guards:
+
+- `isPreviewable()` in `file-names.ts` — the denylist (`.tif`/`.tiff` only); render "No preview"
+  instead of an `<img>`.
+- An `@error` handler on the `<img>` — it is a denylist, so corrupt files and formats nobody thought
+  of are attempted and land here.
+- `try`/`catch` around `cache.acquire()`, plus a pending state — `acquire()` rejects on a HEIC
+  libheif will not read, and an unhandled rejection leaves the frame blank forever.
+
+**HEIC is decoded by us, not by Chrome.** No browser licenses HEVC, so `lib/preview/` runs libheif in
+a worker pool: decode, downscale to 2048px, re-encode as JPEG. At ~600ms of CPU and 46 MB of
+transient RGBA per 12 MP photo it has to be queued, cancellable and off the main thread — hence the
+shimmer while a tile waits. `heic-decode` is imported from `heic-worker.ts` and nowhere else; on the
+main thread it puts a megabyte of wasm in the entry chunk.
+
+**`heic-decode` must stay in `optimizeDeps.include`.** It is 1.5 MB of CommonJS with wasm inlined as
+base64; without pre-bundling, the first HEIC after a cold `pnpm dev` blocks for over a minute against
+84ms with it. Dev-server trap only — production builds are unaffected.
+
+**`ThumbnailCache` is capped twice.** A pass-through object URL is a handle onto a file and costs no
+memory; a decoded HEIC preview is a JPEG we are holding. Renderers report `bytes` so the byte budget
+evicts the second kind without punishing the first. Pair every `acquire()` with exactly one
+`release()` — including when it rejects, and when you give up before it settles, which is what
+cancels a decode nobody is waiting for.
+
+### Grid, input, dialogs
+
+**The size slider must not keep focus.** Reka focuses the thumb on pointerdown, as it must to be
+draggable; if it still holds focus on pointerup the arrow keys stay aimed at the slider and only the
+mouse gets you back to the gallery. `SizeSlider` blurs on `pointerup` only — never on keydown, so
+Tab-ing to it still works — and `useKeyboard` ignores keys aimed at `role="slider"`, or one arrow
+press would resize _and_ move the selection.
+
+**`Cmd`/`Ctrl` + `O` sits above the rest of the key map, deliberately.** `useKeyboard` returns early
+when there is no folder, so inside the `switch` the chord would work only once a folder was already
+open — the half that matters least. It also precedes `handlesItsOwnKeys`, since unlike the arrows it
+means nothing in a text field. And nothing may be awaited before `openFolder()`:
+`showDirectoryPicker()` needs the user activation the keydown carries, so `openFolder` →
+`guard.attempt` → `source.open()` has to stay synchronous.
+
+**Dialogs close themselves before your click handler runs.** Reka's `AlertDialogAction` dismisses the
+dialog as part of handling the click, so state cleared in the "dialog closed" path is already gone
+when the confirm handler looks for it, and the confirm silently does nothing. Both dialogs track
+_whether they are open_ separately from _what they are about_ (`deleteDialogOpen` / `pendingDelete`,
+`guard.open` / `guard.pending`). Do not merge them back.
 
 **A dragged tile never leaves its cell.** `ImageTile`'s root is the grid cell and stays put — it is
-the dashed drop placeholder — while a card _inside_ it carries the transform that follows the
-cursor. `useTileDrag` measures the root to work out that offset, so moving the transform back onto
-the root reintroduces the problem the old code needed a correction term for, and leaves no cell to
-draw the placeholder in. The root also gets `transition: none` while dragging, or `TransitionGroup`
-FLIPs the placeholder to its new cell over 260ms and the card drifts under the cursor for the whole
-animation.
+the dashed drop placeholder — while a card _inside_ it carries the transform following the cursor,
+and `useTileDrag` measures the root for that offset. Moving the transform onto the root brings back
+the correction term the old code needed and leaves no cell to draw the placeholder in. The root also
+gets `transition: none` while dragging, or `TransitionGroup` FLIPs the placeholder over 260ms and the
+card drifts under the cursor for the whole animation.
 
-**Auto-scroll must not read `scrollHeight`.** A transformed box still counts towards its scroller's
-scrollable overflow, so the lifted card inflates `scrollHeight` by however far it has been dragged —
-and scrolling towards it creates more of it, a loop that runs off the end of the last row into blank
-space. `useTileDrag` clamps to `contentHeight()`, the grid's laid-out height, which no transform can
-change. `gallery.spec.ts` holds a drag at the bottom edge to prove it.
+**Auto-scroll must not read `scrollHeight`.** The lifted card's transform still counts towards
+scrollable overflow, so scrolling towards it creates more of it — a loop that runs off the last row
+into blank space. `useTileDrag` clamps to `contentHeight()`, the grid's laid-out height, which no
+transform can change. `gallery.spec.ts` holds a drag at the bottom edge to prove it.
 
 **`columnCount()` reimplements a browser decision** — how many tracks `auto-fill` produces — and
-arrow keys and drag hit-testing both trust it. `grid-geometry.browser.test.ts` checks it against
-real layout across a matrix of widths and tile sizes. If you change the grid CSS, that test is what
-tells you whether the maths still holds.
+arrow keys and drag hit-testing both trust it. `grid-geometry.browser.test.ts` checks it against real
+layout across a matrix of widths and tile sizes; if you change the grid CSS, that test tells you
+whether the maths still holds.
+
+### Build
+
+**`memory-adapter.ts` and `fixtures.ts` must never be reachable from `src/main.ts`.** The e2e harness
+has its own HTML entry; keeping the fake out of the production entry graph is what keeps it out of
+the bundle. `grep MemoryAdapter dist/assets/*.js` should find nothing.
+
+**Assets must go through Vite.** `base` is `/aperture/`, so a hardcoded leading-slash URL 404s in
+production.
 
 ## Testing
 
-There is **no `happy-dom` or `jsdom`**, on purpose. Most of this app's UI logic is geometry —
-column counts, hit-testing a pointer to a grid cell, `IntersectionObserver`, `scrollIntoView` — and
-a synthetic DOM has no layout engine, so `getBoundingClientRect()` returns zeros and those tests
-would assert nothing. Two Vitest projects instead:
+There is **no `happy-dom` or `jsdom`**, on purpose: most of this app's UI logic is geometry, and a
+synthetic DOM has no layout engine, so `getBoundingClientRect()` returns zeros and those tests would
+assert nothing. Two Vitest projects instead:
 
 - **`unit`** (`*.test.ts`, node, no DOM): everything in `src/lib/` that is pure or takes a
-  `FileSystemPort` argument. This is where the rename engine is covered, against `MemoryAdapter`.
-- **`browser`** (`*.browser.test.ts`, real Chromium via Playwright): components whose behaviour
-  depends on real layout, and anything reaching for a browser API node does not have —
-  `useGallery.browser.test.ts` is there because `localStorage` is, and a hand-written stub would
-  only prove the stub works.
+  `FileSystemPort`. The rename engine is covered here, against `MemoryAdapter`.
+- **`browser`** (`*.browser.test.ts`, real Chromium via Playwright): anything depending on real
+  layout, or on a browser API node lacks — `useGallery.browser.test.ts` is there because
+  `localStorage` is, and a hand-written stub would only prove the stub works.
 
-Put a new test in `unit` unless it genuinely needs layout or a real browser API. If you find
-yourself mocking `getBoundingClientRect`, it belongs in `browser`.
+Put a new test in `unit` unless it genuinely needs layout or a real browser API; if you find yourself
+mocking `getBoundingClientRect`, it belongs in `browser`. On top of both, `pnpm e2e` drives the whole
+app in Chromium through `e2e/harness.html`.
 
-On top of those, `pnpm e2e` drives the whole app in Chromium through `e2e/harness.html`.
-
-**On `components/ui/`:** these are shadcn-vue's output, and shadcn's model is that you own them —
-customising is expected, not a smell. `Slider.vue` has one Aperture change: a `label` prop, because
-`role="slider"` sits on the thumb and a plain `aria-label` on the component would land on the root
-and leave the control unnamed. Mark any further edits the same way, so a future regeneration does
-not quietly drop them.
+**On `components/ui/`:** shadcn-vue's output, which you are meant to own — customising is expected,
+not a smell. `Slider.vue` has one Aperture change: a `label` prop, because `role="slider"` sits on
+the thumb and a plain `aria-label` would land on the root and leave the control unnamed. Mark further
+edits the same way, so a regeneration does not quietly drop them.
 
 ## Deployment
 
-Pushing to `main` builds and deploys to GitHub Pages. `main` is protected: PRs only, and `verify`
-and `e2e` must be green to merge.
+Pushing to `main` builds and deploys to GitHub Pages. `main` is protected: PRs only, `verify` and
+`e2e` green to merge. `itsjoshpark.github.io` carries the `joshuapark.dev` CNAME, so this project
+site is served under the custom domain automatically — nothing in the personal-site repo changes.
 
 ## Git Workflow
 
-Use conventional branch names for all non-trivial work:
-
-- `feat/<scope>-<short-description>`
-- `fix/<scope>-<short-description>`
-- `chore/<scope>-<short-description>`
-- `docs/<scope>-<short-description>`
-- `test/<scope>-<short-description>`
-- `refactor/<scope>-<short-description>`
-
-Use lowercase kebab-case for branch names. Keep them brief and specific.
-
-Use Conventional Commits for every commit message:
-
-- Format: `<type>(<optional-scope>): <description>`
-- Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `build`, `ci`, `perf`, `revert`
-- Description: imperative mood, lowercase start, no trailing period
-
-`itsjoshpark.github.io` carries the `joshuapark.dev` CNAME, so GitHub serves this project site under
-that custom domain automatically. Nothing in the personal-site repo needs to change.
+Branches for all non-trivial work: `<type>/<scope>-<short-description>`, lowercase kebab-case, brief
+and specific. Commits: Conventional Commits, `<type>(<optional-scope>): <description>`, imperative
+mood, lowercase start, no trailing period. Types for both: `feat`, `fix`, `docs`, `style`,
+`refactor`, `test`, `chore`, `build`, `ci`, `perf`, `revert`.
 
 <!--VITE PLUS START-->
 
