@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { jpegWithDateTaken } from "./fixtures";
 import { MemoryAdapter } from "./memory-adapter";
 import { FileOperationError } from "./types";
 
@@ -23,6 +24,19 @@ describe("MemoryAdapter", () => {
 
     expect(times).toEqual([...times].sort((a, b) => a - b));
     expect(new Set(times).size).toBe(3);
+  });
+
+  it("reads the date taken out of a file's bytes", async () => {
+    const bytes = jpegWithDateTaken("2019:11:02 18:44:01", { offset: "+09:00" });
+    const [entry] = await new MemoryAdapter([{ name: "a.jpg", bytes }]).list();
+
+    expect(entry!.dateTaken?.wallClock).toBe("2019-11-02T18:44:01");
+  });
+
+  it("leaves date taken null when the bytes carry no EXIF", async () => {
+    const [entry] = await new MemoryAdapter(["a.jpg"]).list();
+
+    expect(entry!.dateTaken).toBeNull();
   });
 
   it("returns file contents", async () => {

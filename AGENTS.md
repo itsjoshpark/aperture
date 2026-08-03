@@ -33,10 +33,11 @@ src/
       types.ts            FileSystemPort — the seam everything else is written against
       fsa-adapter.ts      File System Access implementation
       memory-adapter.ts   in-memory fake (tests + harness only)
-      fixtures.ts         real PNG/HEIC bytes (tests + harness only)
+      fixtures.ts         real PNG/JPEG/HEIC bytes (tests + harness only)
       folder-source.ts    where folders come from; swapped by the harness
     naming.ts        PURE: filename planning + validation
     rename-engine.ts executes a plan against a FileSystemPort
+    exif.ts          PURE (bar one Blob read): the date a photo was taken
     sort.ts          natural-name + date comparators
     grid-geometry.ts PURE: width/gap -> columns, index<->cell, pointer hit-test
     preview/         turning a file into something an <img> can show
@@ -96,6 +97,30 @@ images or not — is what rename mode checks targets against, and a session outl
 folder. Copying it into the session at `begin()` meant deleting a file left the bar refusing a name
 nothing held any more, with no way out but restarting. Any operation that changes folder contents
 must update `allNames`, the way `remove()` and `refresh()` do.
+
+### Dates
+
+**Date-modified is destroyed by the app's own main feature.** `copyThenDelete` rewrites the bytes, so
+every rename resets it. EXIF travels with the contents, which is why `lib/exif.ts` exists and why
+"Date taken" is the sort that still means something afterwards.
+
+**`DateTaken` keeps a wall clock as well as an epoch, and both are load-bearing.** `epoch` orders;
+`wallClock` is the time the camera recorded, which is what a filename built from a date has to say.
+Deriving one from the other runs it through the _viewer's_ timezone — an hour out at home, a day out
+for a photo taken abroad. This is the bug `exifr` ships by default.
+
+**A file with no date taken sorts by its modified date.** Screenshots and downloads have no EXIF at
+all, and there are usually a few in any real folder. Anything else that reads `dateTaken` should fall
+back the same way rather than inventing a second answer.
+
+**Reading EXIF costs a 64 KB read per file**, paid concurrently while a folder opens — about 0.23 ms
+per file, so a thousand photos is a fifth of a second. `readDatesTaken` caps how many are in flight;
+removing the cap trades that for thrashing the disk.
+
+**HEIC may need a second read, and the parser will ask for one.** EXIF is an item placed by `iloc` at
+an absolute offset that can sit anywhere in the file, so `locateExif` returns either a position or a
+range to go and fetch. Real Apple files land inside the prefix; do not conclude from that that the
+second read is dead code.
 
 ### Previews
 

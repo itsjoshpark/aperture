@@ -46,7 +46,7 @@ function setDirection(direction: SortDirection): void {
 
     <DropdownMenuContent align="start" class="w-48">
       <DropdownMenuItem
-        v-for="field in ['name', 'date'] as const"
+        v-for="field in ['name', 'modified', 'taken'] as const"
         :key="field"
         @select="setField(field)"
       >

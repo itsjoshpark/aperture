@@ -1,3 +1,4 @@
+import { readDateTakenIn } from "@/lib/exif";
 import { isImageName, splitName } from "@/lib/file-names";
 import { FileOperationError, type FileSystemPort, type ImageEntry } from "./types";
 
@@ -120,6 +121,9 @@ export class MemoryAdapter implements FileSystemPort {
       ext,
       size: file.bytes.byteLength,
       lastModified: file.lastModified,
+      // Parsed from the bytes rather than taken as a parameter, so a spec that
+      // wants a date has to hand over a file that genuinely carries one.
+      dateTaken: readDateTakenIn(file.bytes),
       getFile: async () =>
         new File([file.bytes as unknown as BlobPart], name, {
           type: file.type,
