@@ -61,4 +61,4 @@ knowing before changing anything.
 
 ## Licence
 
-[MIT](LICENSE)
+[GPLv3](LICENSE)
