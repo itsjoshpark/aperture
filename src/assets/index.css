@@ -74,6 +74,16 @@
   --control-primary-top: oklch(0.6 0.17 252);
   --control-primary-bottom: oklch(0.49 0.17 256);
 
+  /*
+   * The quiet red: a button that opens a confirmation, not one that carries it
+   * out. Full-strength `--control-destructive-*` is what the dialog's confirm
+   * wears, and a delete sitting permanently in the toolbar cannot shout that
+   * loudly beside the actions you actually came to use. Theme-independent for
+   * the same reason the commit face is.
+   */
+  --control-danger-top: oklch(0.46 0.1 25);
+  --control-danger-bottom: oklch(0.38 0.095 25);
+
   /* The menu panel is the same material as the trigger that opened it, so its
    * dividers cannot use `--border`, which is tuned to the chrome behind it. */
   --control-divider: oklch(0 0 0 / 0.12);
@@ -261,15 +271,11 @@
     --control-inner-dark: oklch(0 0 0 / 0.5);
   }
 
-  /*
-   * The tile delete button. It sits on the chrome like every other control, so
-   * it wears the plain themed face and overrides only the hover — red, because
-   * of what it does. It is also the one control invisible until you reach for it
-   * (see `ImageTile`), which makes hover the state that carries it.
-   */
-  .control-face-delete:hover {
-    --control-top: var(--control-destructive-top);
-    --control-bottom: var(--control-destructive-bottom);
+  .control-face-danger {
+    --control-top: var(--control-danger-top);
+    --control-bottom: var(--control-danger-bottom);
+    --control-foreground: oklch(0.97 0 0);
+    --control-inner-dark: oklch(0 0 0 / 0.5);
   }
 
   /*

@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { useAperture } from "@/composables/useAperture";
 import { OPEN_FOLDER_HINT } from "@/lib/platform";
-import { FolderOpen, Pencil, Undo2 } from "lucide-vue-next";
+import { FolderOpen, Pencil, Trash2, Undo2 } from "lucide-vue-next";
 import { computed } from "vue";
 import SortMenu from "./SortMenu.vue";
 
@@ -38,6 +38,18 @@ const count = computed(() => aperture.displayed.value.length);
     </p>
 
     <div class="ml-auto flex items-center gap-2">
+      <Button
+        variant="danger"
+        size="sm"
+        class="gap-1.5"
+        aria-keyshortcuts="Delete"
+        :disabled="!aperture.selectedEntry.value"
+        @click="aperture.askToDelete()"
+      >
+        <Trash2 class="size-4" />
+        Delete
+      </Button>
+
       <SortMenu />
 
       <Button

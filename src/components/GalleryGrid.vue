@@ -141,7 +141,6 @@ defineExpose({ scroller, getTileRect });
         :draggable="rename.active.value"
         @select="gallery.select(entry.name)"
         @activate="aperture.openLargeView()"
-        @remove="aperture.askToDelete(entry)"
         @drag-start="drag.onPointerDown($event, index)"
       />
     </TransitionGroup>

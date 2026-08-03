@@ -27,6 +27,12 @@ export const buttonVariants = cva(
         primary: "control-face control-face-primary",
         destructive: "control-face control-face-destructive",
         /*
+         * Aperture change: the two reds are not interchangeable. `destructive`
+         * is the button that deletes; `danger` is one that asks first, muted
+         * because it lives in the chrome next to everything else.
+         */
+        danger: "control-face control-face-danger",
+        /*
          * Aperture change: the documented way out of the system. The large
          * view's controls float over the photograph itself, where a raised
          * chrome-coloured pill would compete with the image.

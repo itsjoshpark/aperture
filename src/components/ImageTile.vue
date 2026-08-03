@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useIntersectionObserver } from "@vueuse/core";
-import { ImageOff, Trash2 } from "lucide-vue-next";
+import { ImageOff } from "lucide-vue-next";
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { isPreviewable } from "@/lib/file-names";
 import type { ImageEntry } from "@/lib/fs/types";
@@ -22,7 +22,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [];
   activate: [];
-  remove: [];
   dragStart: [event: PointerEvent];
 }>();
 
@@ -146,7 +145,7 @@ defineExpose({
     :tabindex="selected && !removing ? 0 : -1"
     :class="
       cn(
-        'group relative flex flex-col rounded-sm select-none',
+        'relative flex flex-col rounded-sm select-none',
         'transition-[transform,opacity] duration-(--motion-fast) ease-(--motion-ease)',
         'focus-visible:outline-none',
         dragging && 'z-20',
@@ -246,42 +245,21 @@ defineExpose({
         </div>
       </div>
 
-      <div class="mt-1.5 flex items-center gap-1">
-        <!--
-          Dead weight opposite the delete button, and the only reason the name is
-          centred on the tile rather than on whatever is left over beside it. It
-          has to stay the same size as the button.
-        -->
-        <span class="size-5.5 shrink-0" aria-hidden="true" />
-
-        <!--
-          In rename mode the new name goes on the primary line and the old one
-          below it: side by side, the arrow and the struck-through original eat
-          most of the width and truncate away the only part you are checking.
-        -->
-        <div class="min-w-0 flex-1 text-center" :title="entry.name">
-          <p class="truncate text-[11px] leading-4" :class="renaming && 'font-medium'">
-            {{ previewName ?? entry.name }}
-          </p>
-          <p
-            v-if="renaming"
-            class="truncate text-[10px] leading-3.5 text-muted-foreground line-through"
-          >
-            {{ entry.name }}
-          </p>
-        </div>
-
-        <!-- On hover alone: a delete control pinned to the selected tile would be
-             the one thing permanently drawn beside every photograph. -->
-        <button
-          type="button"
-          :aria-label="`Delete ${entry.name}`"
-          class="control-face control-face-delete size-5.5 shrink-0 rounded-xs p-1 opacity-0 transition-opacity duration-(--motion-fast) group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive"
-          @click.stop="emit('remove')"
-          @pointerdown.stop
+      <!--
+        In rename mode the new name goes on the primary line and the old one
+        below it: side by side, the arrow and the struck-through original eat
+        most of the width and truncate away the only part you are checking.
+      -->
+      <div class="mt-1.5 min-w-0 text-center" :title="entry.name">
+        <p class="truncate text-[11px] leading-4" :class="renaming && 'font-medium'">
+          {{ previewName ?? entry.name }}
+        </p>
+        <p
+          v-if="renaming"
+          class="truncate text-[10px] leading-3.5 text-muted-foreground line-through"
         >
-          <Trash2 class="size-3.5" />
-        </button>
+          {{ entry.name }}
+        </p>
       </div>
     </div>
   </div>

@@ -185,6 +185,18 @@ test.describe("delete", () => {
     expect(await diskNames(page)).toEqual(["b.jpg", "c.jpg"]);
   });
 
+  test("deletes the selection from the toolbar button", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
+
+    await page.getByRole("gridcell").filter({ hasText: "b.jpg" }).click();
+    // Exact: the dialog's own action is "Delete permanently".
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+
+    await expect(page.getByRole("gridcell")).toHaveCount(2);
+    expect(await diskNames(page)).toEqual(["a.jpg", "c.jpg"]);
+  });
+
   test("leaves the file alone when cancelled", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg"]);
 
