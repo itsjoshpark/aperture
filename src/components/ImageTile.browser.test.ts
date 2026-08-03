@@ -119,8 +119,8 @@ test("shows the file name and a delete control", async () => {
 
 test("says so when nothing can decode the format", async () => {
   // Chrome renders no TIFF and there is no decoder worth shipping for it.
-  // Without this the tile is a blank white frame forever, with nothing to
-  // explain why — indistinguishable from the app being broken.
+  // Without this the tile is an empty square forever, with nothing to explain
+  // why — indistinguishable from the app being broken.
   const entry = entryOver("scan.tiff", Uint8Array.from([0, 1, 2, 3]), "image/tiff");
 
   const screen = render(ImageTile, {

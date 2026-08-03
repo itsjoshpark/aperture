@@ -172,16 +172,22 @@ defineExpose({
     />
 
     <!--
-      The visible frame. Separate from the grid cell above so that a drag can
-      offset it without moving the cell it is being dragged out of.
+      The tile's contents. It has no surface of its own — the photo is the tile —
+      and exists as a separate element from the grid cell above only so that a
+      drag can offset it without moving the cell it is being dragged out of.
     -->
     <div
       :class="
         cn(
-          'relative flex flex-col rounded-sm bg-frame p-2 text-frame-foreground',
+          'relative flex flex-col rounded-sm',
           'transition-[box-shadow] duration-(--motion-fast) ease-(--motion-ease)',
-          selected ? 'shadow-(--frame-shadow-selected)' : 'shadow-(--frame-shadow)',
-          dragging && 'cursor-grabbing shadow-(--frame-shadow-lifted)',
+          // A lifted tile is the one time it needs a surface. Bare, it is
+          // transparent everywhere but the photo, so the tile it is dragged over
+          // shows through the caption — and it reads as a photo sliding around
+          // rather than as a tile being carried. `--background` rather than a
+          // lighter card colour: it is a piece of the grid picked up, and the
+          // shadow is what says it has been.
+          dragging && 'cursor-grabbing bg-background shadow-(--tile-shadow-lifted)',
         )
       "
       :style="
@@ -190,15 +196,17 @@ defineExpose({
           : undefined
       "
     >
-      <!-- The selection ring lives on its own layer so it is not clipped by the
-           frame's padding and does not shift the image by a pixel. -->
+      <!-- White, because on a wall of bare photographs against dark chrome it is
+           the only thing that cannot be mistaken for part of an image. On its own
+           layer so the image box's `overflow-hidden` cannot clip it and so
+           drawing it does not shift the photo by a pixel. -->
       <span
         v-if="selected"
         aria-hidden="true"
-        class="pointer-events-none absolute inset-0 rounded-sm ring-2 ring-ring ring-offset-2 ring-offset-background"
+        class="pointer-events-none absolute inset-0 rounded-sm ring-2 ring-white ring-offset-2 ring-offset-background"
       />
 
-      <div class="relative aspect-square w-full overflow-hidden rounded-xs bg-frame-well">
+      <div class="relative aspect-square w-full overflow-hidden rounded-sm">
         <img
           v-if="url && !failed"
           :src="url"
@@ -230,9 +238,9 @@ defineExpose({
           v-if="noPreview"
           class="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center"
         >
-          <ImageOff class="size-5 text-frame-foreground/30" aria-hidden="true" />
-          <p class="text-[10px] leading-tight font-medium text-frame-foreground/55">No preview</p>
-          <p v-if="unsupported" class="text-[9px] leading-tight text-frame-foreground/40">
+          <ImageOff class="size-5 text-muted-foreground/50" aria-hidden="true" />
+          <p class="text-[10px] leading-tight font-medium text-muted-foreground">No preview</p>
+          <p v-if="unsupported" class="text-[9px] leading-tight text-muted-foreground/70">
             {{ entry.ext.slice(1).toUpperCase() }} can't be previewed
           </p>
         </div>
@@ -240,33 +248,35 @@ defineExpose({
 
       <div class="mt-1.5 flex items-center gap-1">
         <!--
+          Dead weight opposite the delete button, and the only reason the name is
+          centred on the tile rather than on whatever is left over beside it. It
+          has to stay the same size as the button.
+        -->
+        <span class="size-5.5 shrink-0" aria-hidden="true" />
+
+        <!--
           In rename mode the new name goes on the primary line and the old one
           below it: side by side, the arrow and the struck-through original eat
           most of the width and truncate away the only part you are checking.
         -->
-        <div class="min-w-0 flex-1" :title="entry.name">
+        <div class="min-w-0 flex-1 text-center" :title="entry.name">
           <p class="truncate text-[11px] leading-4" :class="renaming && 'font-medium'">
             {{ previewName ?? entry.name }}
           </p>
           <p
             v-if="renaming"
-            class="truncate text-[10px] leading-3.5 text-frame-foreground/45 line-through"
+            class="truncate text-[10px] leading-3.5 text-muted-foreground line-through"
           >
             {{ entry.name }}
           </p>
         </div>
 
+        <!-- On hover alone: a delete control pinned to the selected tile would be
+             the one thing permanently drawn beside every photograph. -->
         <button
           type="button"
           :aria-label="`Delete ${entry.name}`"
-          :class="
-            cn(
-              'control-face control-face-frame shrink-0 rounded-xs p-1',
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive',
-              'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-              selected && 'opacity-100',
-            )
-          "
+          class="control-face control-face-delete size-5.5 shrink-0 rounded-xs p-1 opacity-0 transition-opacity duration-(--motion-fast) group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive"
           @click.stop="emit('remove')"
           @pointerdown.stop
         >

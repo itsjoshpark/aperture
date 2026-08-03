@@ -4,9 +4,11 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Aperture is a photo tool: the chrome stays dark and desaturated so the white
- * picture frames and the images themselves carry all the contrast. Light mode
- * exists and is honoured, but dark is the default (see index.html).
+ * Aperture is a photo tool: the chrome stays dark and desaturated so the images
+ * themselves carry all the contrast. Nothing in the gallery is painted a lighter
+ * colour than the photographs — the tiles are bare, and the only bright thing on
+ * screen is the ring around the selected one. Light mode exists and is honoured,
+ * but dark is the default (see index.html).
  */
 
 :root {
@@ -32,15 +34,12 @@
   --input: oklch(0.9 0 0);
   --ring: oklch(0.62 0.16 250);
 
-  /* The picture frame itself — a physical white mat around every thumbnail. */
-  --frame: oklch(1 0 0);
-  --frame-foreground: oklch(0.32 0 0);
-  --frame-shadow: 0 1px 2px oklch(0 0 0 / 0.28), 0 6px 14px oklch(0 0 0 / 0.16);
-  --frame-shadow-selected: 0 2px 6px oklch(0 0 0 / 0.34), 0 14px 32px oklch(0 0 0 / 0.28);
-  --frame-shadow-lifted: 0 8px 18px oklch(0 0 0 / 0.4), 0 26px 50px oklch(0 0 0 / 0.34);
-
-  /* The empty cell an image sits in before it has decoded. */
-  --frame-well: oklch(0.93 0 0);
+  /*
+   * A tile has no surface of its own — the photo is the tile, on the chrome,
+   * with nothing painted behind or around it. The one exception is while it is
+   * being dragged, when it needs to read as an object that has been picked up.
+   */
+  --tile-shadow-lifted: 0 8px 18px oklch(0 0 0 / 0.4), 0 26px 50px oklch(0 0 0 / 0.34);
 
   /*
    * Controls are physical, for the same reason the thumbnails are: this is a
@@ -130,8 +129,6 @@
   --input: oklch(1 0 0 / 16%);
   --ring: oklch(0.68 0.15 250);
 
-  --frame-well: oklch(0.88 0 0);
-
   --control-top: oklch(0.98 0 0);
   --control-bottom: oklch(0.855 0 0);
   --control-foreground: oklch(0.2 0 0);
@@ -164,9 +161,6 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-frame: var(--frame);
-  --color-frame-foreground: var(--frame-foreground);
-  --color-frame-well: var(--frame-well);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -268,19 +262,12 @@
   }
 
   /*
-   * The tile delete button sits on `--frame`, the white mat, which is white in
-   * both themes — so it cannot take the themed face or it would be a white pill
-   * on white card in the dark. It is dark either way, and goes red on hover
-   * because of what it does.
+   * The tile delete button. It sits on the chrome like every other control, so
+   * it wears the plain themed face and overrides only the hover — red, because
+   * of what it does. It is also the one control invisible until you reach for it
+   * (see `ImageTile`), which makes hover the state that carries it.
    */
-  .control-face-frame {
-    --control-top: oklch(0.42 0 0);
-    --control-bottom: oklch(0.3 0 0);
-    --control-foreground: oklch(0.97 0 0);
-    --control-inner-dark: oklch(0 0 0 / 0.55);
-  }
-
-  .control-face-frame:hover {
+  .control-face-delete:hover {
     --control-top: var(--control-destructive-top);
     --control-bottom: var(--control-destructive-bottom);
   }
@@ -321,8 +308,8 @@
    * The sweep is a pseudo-element over a flat tint rather than an animated
    * background on the element itself, so that when the reduced-motion override
    * above collapses the animation to a single frame there is still something to
-   * see. Tinted from `currentColor`, because this appears over a light tile well
-   * and over the dark large view.
+   * see. Tinted from `currentColor` rather than a fixed colour, so it stays
+   * visible wherever it is used: a bare tile, the large view, and either theme.
    */
   .preview-shimmer {
     position: relative;
