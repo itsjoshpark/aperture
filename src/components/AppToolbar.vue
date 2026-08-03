@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
 import { useAperture } from "@/composables/useAperture";
+import { OPEN_FOLDER_HINT } from "@/lib/platform";
 import { FolderOpen, Pencil, Undo2 } from "lucide-vue-next";
 import { computed } from "vue";
 import SortMenu from "./SortMenu.vue";
@@ -13,9 +14,19 @@ const count = computed(() => aperture.displayed.value.length);
 
 <template>
   <header class="flex items-center gap-3 border-b bg-card/60 px-3 py-2 backdrop-blur">
-    <Button size="sm" class="gap-1.5" @click="aperture.openFolder()">
+    <Button
+      size="sm"
+      class="gap-1.5"
+      aria-keyshortcuts="Meta+O Control+O"
+      @click="aperture.openFolder()"
+    >
       <FolderOpen class="size-4" />
       Open folder
+      <!-- See `LandingScreen.vue` for why the hint is `aria-hidden`, tinted with
+           `currentColor`, and not dimmed on top of that. -->
+      <kbd class="rounded bg-current/20 px-1.5 py-0.5 font-sans text-xs" aria-hidden="true">{{
+        OPEN_FOLDER_HINT
+      }}</kbd>
     </Button>
 
     <div class="min-w-0">

@@ -107,6 +107,26 @@ test.describe("keyboard", () => {
     await expect(selected(page)).toHaveText(/b\.jpg/);
   });
 
+  test("opens a folder with Cmd/Ctrl+O before there is one", async ({ page }) => {
+    await page.goto(HARNESS);
+    await expect(page.getByRole("grid")).toBeHidden();
+
+    await page.keyboard.press("ControlOrMeta+o");
+
+    await expect(page.getByRole("grid")).toBeVisible();
+  });
+
+  test("Cmd/Ctrl+O reaches openFolder from the gallery too", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg"]);
+
+    // A dirty rename session is what makes the second open observable: it is
+    // the guard, not a fresh grid, that proves the shortcut got there.
+    await page.keyboard.press("ControlOrMeta+ArrowRight");
+    await page.keyboard.press("ControlOrMeta+o");
+
+    await expect(page.getByRole("alertdialog")).toContainText("Rename before you go?");
+  });
+
   test("keeps the selection on the same photo through a re-sort", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 

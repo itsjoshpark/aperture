@@ -127,6 +127,14 @@ is no way back to the gallery but the mouse. `SizeSlider` blurs on `pointerup` o
 keydown — so Tab-ing to it still works. `useKeyboard` correspondingly ignores keys aimed at
 `role="slider"`, or one arrow press would resize _and_ move the selection.
 
+**`Cmd`/`Ctrl` + `O` sits above the rest of the key map, deliberately.** `useKeyboard` opens with
+`if (!aperture.hasFolder.value) return;`, so the landing screen has no key map at all — moving the
+open-folder chord down into the `switch` would leave it working only once a folder is already open,
+which is the half that matters least. It also runs ahead of `handlesItsOwnKeys`, because unlike the
+arrows it means nothing inside a text field. And nothing may be awaited before `openFolder()`:
+`showDirectoryPicker()` needs the user activation the keydown carries, and `openFolder` →
+`guard.attempt` → `source.open()` is a synchronous chain that has to stay one.
+
 **`memory-adapter.ts` and `fixtures.ts` must never be reachable from `src/main.ts`.** They are the
 in-memory fake and its image bytes for tests and the e2e harness, which has its own HTML entry;
 keeping them out of the production entry graph is what keeps them out of the bundle.
