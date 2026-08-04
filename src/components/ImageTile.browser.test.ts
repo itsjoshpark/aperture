@@ -159,6 +159,62 @@ test("puts the drop placeholder exactly where the selection border will be", asy
   expect(ghost.height).toBeLessThan(cell.getBoundingClientRect().width);
 });
 
+/**
+ * A lifted tile has to read as picked up without reading as a card: photographs
+ * are every shape and the card is always a square, so a surface drawn on the
+ * card shows a dark rectangle around a photo that does not fill it. The shadow
+ * belongs to the picture instead.
+ */
+test("lifts the photograph, not a square card behind it", async () => {
+  const screen = render(ImageTile, {
+    props: {
+      entry: entryOver("wide.png", await pngOf(400, 120), "image/png"),
+      cache: new ThumbnailCache(),
+      selected: true,
+      dragging: true,
+      translate: { x: 0, y: 0 },
+    },
+  });
+  screen.container.style.width = "160px";
+
+  const image = screen.getByRole("img", { name: "wide.png" });
+  await expect.element(image).toBeVisible();
+  const photo = () => image.element().getBoundingClientRect();
+  await expect.poll(() => photo().width !== photo().height).toBe(true);
+
+  const cell = screen.getByRole("gridcell").element();
+  const card = cell.querySelector("[data-tile-card]")!;
+  const box = image.element().parentElement!;
+
+  // Nothing paints the card's own rectangle.
+  expect(getComputedStyle(card).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+  expect(getComputedStyle(card).boxShadow).toBe("none");
+
+  // The lift is cast by the photo's box, which is the photo's shape.
+  expect(getComputedStyle(box).boxShadow).not.toBe("none");
+  expect(box.getBoundingClientRect().height).toBeLessThan(cell.getBoundingClientRect().width - 10);
+});
+
+/**
+ * Text decoration does not cross into an atomic inline box, so backing the
+ * caption while it is carried is exactly the change that can silently un-strike
+ * the old name — the one line of a rename preview that says it is the old one.
+ */
+test("keeps the old name struck through while the tile is carried", async () => {
+  const props = {
+    entry: entryFor("beach.png"),
+    cache: new ThumbnailCache(),
+    selected: true,
+    previewName: "1.png",
+    dragging: true,
+    translate: { x: 0, y: 0 },
+  };
+  const screen = render(ImageTile, { props });
+
+  const old = screen.getByText("beach.png").element();
+  expect(getComputedStyle(old).textDecorationLine).toBe("line-through");
+});
+
 test("has no placeholder when it is not being dragged", async () => {
   const screen = mount();
   await expect.element(screen.getByRole("img")).toBeVisible();

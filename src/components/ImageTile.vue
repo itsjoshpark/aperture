@@ -49,6 +49,16 @@ let requested: string | null = null;
 const renaming = computed(() => !!props.previewName && props.previewName !== props.entry.name);
 
 /**
+ * One caption line. Lifted, it takes a backing that hugs the text rather than
+ * filling the card — the card's width is the square this drag is avoiding — so
+ * it becomes `inline-block`, and stays inside a block `<p>` of its own to keep
+ * the rename's two lines stacked rather than sitting side by side.
+ */
+const captionLine = computed(() =>
+  props.dragging ? "inline-block max-w-full rounded-sm bg-background px-1" : "block",
+);
+
+/**
  * Known-undecodable formats are reported without even trying, so there is no
  * flash of empty frame; anything else falls back to the `error` event and to a
  * rejected acquire, which between them cover corrupt files, HEICs libheif will
@@ -225,19 +235,15 @@ defineExpose({
       :class="
         cn(
           'relative flex flex-col rounded-sm',
-          'transition-[box-shadow] duration-(--motion-fast) ease-(--motion-ease)',
           // `flipTiles` animates this element — from the size the tile was, and
           // from the cell it was in — so it needs a corner to pivot on. The
           // cell itself never moves under it, which is what leaves it free to
           // be the drop placeholder.
           'origin-top-left',
-          // A lifted tile is the one time it needs a surface. Bare, it is
-          // transparent everywhere but the photo, so the tile it is dragged over
-          // shows through the caption — and it reads as a photo sliding around
-          // rather than as a tile being carried. `--background` rather than a
-          // lighter card colour: it is a piece of the grid picked up, and the
-          // shadow is what says it has been.
-          dragging && 'cursor-grabbing bg-background shadow-(--tile-shadow-lifted)',
+          // No surface of its own, even lifted: a card-shaped background is a
+          // square, and almost no photograph is. The shadow that says it has
+          // been picked up is drawn on the photo instead, to the photo's shape.
+          dragging && 'cursor-grabbing',
         )
       "
       :style="
@@ -276,7 +282,15 @@ defineExpose({
         -->
         <div
           data-select-target
-          class="absolute inset-0 m-auto"
+          :class="
+            cn(
+              'absolute inset-0 m-auto',
+              'transition-[box-shadow] duration-(--motion-fast) ease-(--motion-ease)',
+              // The lift, cast by the picture itself. On the card it would be
+              // the shadow of a square the tile does not have.
+              dragging && 'shadow-(--tile-shadow-lifted)',
+            )
+          "
           :style="photoBox"
           @click.stop="emit('select', $event)"
         >
@@ -355,14 +369,22 @@ defineExpose({
         :title="entry.name"
         @click.stop="emit('select', $event)"
       >
-        <p class="truncate text-[11px] leading-4" :class="renaming && 'font-medium'">
-          {{ previewName ?? entry.name }}
+        <!--
+          Lifted, the name is carried over other people's photographs with
+          nothing behind it, so each line takes a backing of its own.
+        -->
+        <p class="text-[11px] leading-4" :class="renaming && 'font-medium'">
+          <span :class="cn('max-w-full truncate', captionLine)">{{
+            previewName ?? entry.name
+          }}</span>
         </p>
-        <p
-          v-if="renaming"
-          class="truncate text-[10px] leading-3.5 text-muted-foreground line-through"
-        >
-          {{ entry.name }}
+        <!--
+          `line-through` on the span, not the `<p>`: a decoration set on a block
+          does not reach into an atomic inline box, so lifting the line into an
+          `inline-block` backing would quietly un-strike the old name.
+        -->
+        <p v-if="renaming" class="text-[10px] leading-3.5 text-muted-foreground">
+          <span :class="cn('max-w-full truncate line-through', captionLine)">{{ entry.name }}</span>
         </p>
       </div>
     </div>

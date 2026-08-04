@@ -230,9 +230,16 @@ apart from the cursor, so each range is redrawn from the same place instead of e
 one. The invariant the single writer exists to keep: the cursor and the anchor are members of the set,
 or the set is empty and both are null.
 
+**Nothing a drag draws may be card-shaped.** The card is always a square and photographs are every
+shape, so a surface on the card is a dark rectangle around a picture that does not fill it. The lifted
+tile therefore has no background and no shadow of its own: the shadow is cast by the photo's box, the
+dashed drop placeholder rebuilds the same square-then-photo-box to trace the photograph, and each
+caption line takes an `inline-block` backing sized to the text. That last one carries a trap —
+text decoration does not cross into an atomic inline box, so `line-through` sits on the span rather
+than the `<p>`, or a lifted rename preview quietly stops striking out the old name.
+
 **A dragged tile never leaves its cell.** `ImageTile`'s root is the grid cell and stays put — it is
-what hosts the dashed drop placeholder, which rebuilds the card's square-then-photo-box to trace the
-photograph rather than the cell — while a card _inside_ it carries the transform following the cursor,
+what hosts the drop placeholder — while a card _inside_ it carries the transform following the cursor,
 and `useTileDrag` measures the root for that offset. Moving the transform onto the root brings back
 the correction term the old code needed and leaves no cell to draw the placeholder in. The root also
 gets `transition: none` while dragging, or `TransitionGroup` FLIPs the placeholder over 260ms and the
