@@ -153,15 +153,6 @@ export function hitTest(
   return clamp(row * columns + column, 0, count - 1);
 }
 
-/** Move an item within an array. Returns a new array; the input is untouched. */
-export function reorder<T>(items: T[], from: number, to: number): T[] {
-  if (from === to || from < 0 || from >= items.length) return items;
-  const next = [...items];
-  const [moved] = next.splice(from, 1);
-  next.splice(clamp(to, 0, next.length), 0, moved!);
-  return next;
-}
-
 /**
  * Lift `run` out of `items` — wherever its members are scattered — and put it
  * back as one block beginning at `start`, keeping the run's own order.

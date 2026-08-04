@@ -15,10 +15,22 @@ import { useAperture } from "@/composables/useAperture";
 const aperture = useAperture();
 
 const count = computed(() => aperture.pendingDeletes.value.length);
+const one = computed(() => count.value === 1);
+
 const title = computed(() =>
-  count.value === 1
-    ? `Delete ${aperture.pendingDeletes.value[0]?.name}?`
-    : `Delete ${count.value} images?`,
+  one.value ? `Delete ${aperture.pendingDeletes.value[0]?.name}?` : `Delete ${count.value} images?`,
+);
+
+/**
+ * The File System Access API has no route to the Trash — `removeEntry` is a
+ * permanent delete. Saying "move to Trash" would be a lie people only discover
+ * when they go looking for the file, so the sentence is written once and only
+ * its nouns are inflected.
+ */
+const description = computed(() =>
+  one.value
+    ? "This permanently deletes the file from your disk. It is not moved to the Trash and cannot be undone."
+    : "This permanently deletes these files from your disk. They are not moved to the Trash and cannot be undone.",
 );
 
 const open = computed({
@@ -34,19 +46,7 @@ const open = computed({
     <AlertDialogContent>
       <AlertDialogHeader>
         <AlertDialogTitle>{{ title }}</AlertDialogTitle>
-        <!--
-          The File System Access API has no route to the Trash — removeEntry is
-          a permanent delete. Saying "move to Trash" would be a lie people only
-          discover when they go looking for the file.
-        -->
-        <AlertDialogDescription v-if="count === 1">
-          This permanently deletes the file from your disk. It is not moved to the Trash and cannot
-          be undone.
-        </AlertDialogDescription>
-        <AlertDialogDescription v-else>
-          This permanently deletes these files from your disk. They are not moved to the Trash and
-          cannot be undone.
-        </AlertDialogDescription>
+        <AlertDialogDescription>{{ description }}</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
         <AlertDialogCancel>Cancel</AlertDialogCancel>

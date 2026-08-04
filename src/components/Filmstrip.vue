@@ -16,7 +16,7 @@ function register(name: string, el: unknown): void {
 
 // Keep the current image centred as you move through the strip.
 watch(
-  () => gallery.selectedName.value,
+  () => gallery.cursorName.value,
   async (name) => {
     if (!name) return;
     await nextTick();
@@ -38,12 +38,12 @@ watch(
       :ref="(el) => register(entry.name, el)"
       type="button"
       role="option"
-      :aria-selected="entry.name === gallery.selectedName.value"
+      :aria-selected="entry.name === gallery.cursorName.value"
       :title="entry.name"
       :class="
         cn(
           'size-14 shrink-0 overflow-hidden rounded-xs bg-white/5 p-0.5 transition-all duration-(--motion-fast)',
-          entry.name === gallery.selectedName.value
+          entry.name === gallery.cursorName.value
             ? 'ring-2 ring-white opacity-100'
             : 'opacity-55 hover:opacity-85',
         )

@@ -20,7 +20,7 @@ useKeyboard(aperture);
 const grid = shallowRef<InstanceType<typeof GalleryGrid> | null>(null);
 
 const largeView = useLargeViewTransition(aperture.motion, () => {
-  const name = aperture.gallery.selectedName.value;
+  const name = aperture.gallery.cursorName.value;
   return name ? (grid.value?.getTileRect(name) ?? null) : null;
 });
 </script>

@@ -1,5 +1,4 @@
 import { useEventListener } from "@vueuse/core";
-import { clamp } from "@/lib/grid-geometry";
 import type { Aperture } from "./useAperture";
 
 /**
@@ -42,7 +41,7 @@ export function useKeyboard(aperture: Aperture) {
       case "ArrowRight": {
         const direction = event.key === "ArrowLeft" ? "left" : "right";
         if (reorderModifier && !inLargeView) {
-          reorderSelected(aperture, direction === "left" ? -1 : 1);
+          aperture.nudgeSelection(direction === "left" ? -1 : 1);
         } else {
           aperture.moveSelectionBy(direction, extend);
         }
@@ -53,8 +52,7 @@ export function useKeyboard(aperture: Aperture) {
       case "ArrowDown": {
         if (inLargeView) return; // vertical movement is meaningless on one image
         if (reorderModifier) {
-          reorderSelected(
-            aperture,
+          aperture.nudgeSelection(
             event.key === "ArrowUp" ? -aperture.columns.value : aperture.columns.value,
           );
         } else {
@@ -97,33 +95,6 @@ export function useKeyboard(aperture: Aperture) {
 
     event.preventDefault();
   });
-}
-
-/**
- * Keyboard reordering, so arranging images is not mouse-only. Entering rename
- * mode on the first press mirrors what dragging does.
- *
- * A selection of several moves as one run, gathered around the cursor on the
- * first press the same way a drag gathers it — otherwise each press would deal
- * the photos out one at a time and the arrangement would come apart.
- */
-function reorderSelected(aperture: Aperture, delta: number): void {
-  if (!aperture.rename.active.value) aperture.enterRename();
-
-  const list = aperture.displayed.value;
-  const carried = aperture.selectedEntries.value;
-  if (carried.length === 0) return;
-
-  const first = list.indexOf(carried[0]!);
-  const contiguous = carried.every((entry, at) => list[first + at] === entry);
-  const start = contiguous
-    ? first
-    : clamp(aperture.selectedIndex.value, 0, list.length - carried.length);
-
-  const to = clamp(start + delta, 0, list.length - carried.length);
-  if (contiguous && to === start) return;
-
-  aperture.rename.moveRun(carried, to);
 }
 
 /**

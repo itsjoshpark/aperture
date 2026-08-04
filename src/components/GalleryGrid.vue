@@ -5,13 +5,7 @@ import { useAperture } from "@/composables/useAperture";
 import { useTileDrag } from "@/composables/useTileDrag";
 import { MAX_TILE_SIZE, MIN_TILE_SIZE } from "@/composables/useGallery";
 import type { ImageEntry } from "@/lib/fs/types";
-import {
-  cellWidthFor,
-  clamp,
-  columnCount,
-  type GridMetrics,
-  tileSizeStops,
-} from "@/lib/grid-geometry";
+import { cellWidthFor, columnCount, type GridMetrics, tileSizeStops } from "@/lib/grid-geometry";
 import { captureTiles, flipTiles, TILE_FLIP_DURATION } from "@/lib/tile-flip";
 import ImageTile from "./ImageTile.vue";
 
@@ -78,14 +72,10 @@ const metrics = (): GridMetrics => {
 };
 
 /**
- * The block of photos a drag is carrying. `size` is how many, `offset` where the
- * pressed tile sits inside it — the cursor holds that one photo, and the rest of
- * the run travels either side of it.
- *
- * The run is made contiguous in the draft when the drag begins, which is what
- * lets `useTileDrag` go on thinking in single indices.
+ * The photos a drag is carrying, in the order they will land. One tile is a run
+ * of one, so nothing below has a single-tile case beside the block case.
  */
-const block = shallowRef<{ entries: ImageEntry[]; offset: number } | null>(null);
+const carried = shallowRef<ImageEntry[]>([]);
 
 const drag = useTileDrag({
   scroller: () => scroller.value,
@@ -105,54 +95,26 @@ const drag = useTileDrag({
 
     // Pressing a photo outside the selection drags that photo alone, the way
     // Finder does — the selection you had was about something else.
-    const carried = gallery.selectedNames.value.has(pressed.name)
-      ? aperture.selectedEntries.value
-      : [pressed];
-    if (carried.length === 1) {
-      gallery.select(pressed.name);
-      block.value = null;
-      await nextTick();
-      return;
-    }
+    if (!gallery.selectedNames.value.has(pressed.name)) gallery.select(pressed.name);
+    carried.value = aperture.selectedEntries.value;
 
-    // Gather the selection around the pressed tile so the run is contiguous
-    // from here on, and `useTileDrag` can go on tracking a single index.
-    // `flipThrough` is what makes them visibly close up rather than teleport.
-    const offset = carried.indexOf(pressed);
-    const start = clamp(index - offset, 0, aperture.displayed.value.length - carried.length);
-    block.value = { entries: carried, offset };
-    await flipThrough(() => rename.moveRun(carried, start));
-    return start + offset;
+    await nextTick();
+    return { size: carried.value.length, offset: carried.value.indexOf(pressed) };
   },
-  // The tiles the dragged one displaces slide out of its way; the dragged card
-  // itself is under the cursor and is left alone.
-  onMove: (from, to) => {
-    const carried = block.value;
-    if (!carried) {
-      void flipThrough(() => rename.move(from, to));
-      return;
-    }
-    // `from` is the pressed tile's index, so the run it sits in starts here.
-    const start = from - carried.offset;
-    const size = carried.entries.length;
-    const next = clamp(to - carried.offset, 0, aperture.displayed.value.length - size);
-    if (next !== start) void flipThrough(() => rename.moveRun(carried.entries, next));
-    return next + carried.offset;
-  },
-  onEnd: () => {
-    block.value = null;
-  },
-  onCancel: () => {
-    block.value = null;
-    rename.cancel();
-  },
+  // The tiles the run displaces slide out of its way; the lifted card itself is
+  // under the cursor and is left alone. The first call gathers a scattered
+  // selection into one block, which is why they visibly close up.
+  onMove: (start) => void flipThrough(() => rename.moveRun(carried.value, start)),
+  onCancel: () => rename.cancel(),
 });
 
 // Dropping a tile lands it wherever the cursor left it, which is not where its
 // cell is. This watcher runs before the release reaches the DOM, so the card is
 // still lifted when it is measured and settled by the time it is animated.
 watch(drag.dragging, (lifted) => {
-  if (!lifted) void flipThrough();
+  if (lifted) return;
+  carried.value = [];
+  void flipThrough();
 });
 
 /**
@@ -186,31 +148,33 @@ function registerTile(name: string, instance: unknown): void {
   else tiles.delete(name);
 }
 
-/** The standard three: plain click replaces, `Cmd`/`Ctrl` toggles, `Shift` ranges. */
-function onSelect(name: string, event: MouseEvent): void {
+/**
+ * Every click in the grid arrives here, and one rule sorts them: it either
+ * landed on something that marks itself selectable — a photograph or its
+ * caption — or it landed on background, which is the gaps, the padding, the
+ * letterboxing beside a tall photo, and everything below the last row.
+ *
+ * Delegated rather than handled per tile so there is one place that knows the
+ * rule; the tiles only have to declare which of their parts is the photograph.
+ */
+function onGridClick(event: MouseEvent): void {
+  // The pointerup that ends a drag fires a click too, retargeted by the pointer
+  // capture onto the cell — which is not a select target, and would clear the
+  // selection you just dragged.
+  if (drag.justDropped()) return;
+
+  const target = (event.target as HTMLElement | null)?.closest("[data-select-target]");
+  const name = target?.closest<HTMLElement>("[data-name]")?.dataset.name;
+  if (name === undefined) {
+    gallery.clearSelection();
+    return;
+  }
+
+  // The standard three: plain click replaces, `Cmd`/`Ctrl` toggles, `Shift` ranges.
   const list = aperture.displayed.value;
   if (event.metaKey || event.ctrlKey) gallery.toggle(name, list);
   else if (event.shiftKey) gallery.extendTo(name, list);
   else gallery.select(name);
-}
-
-/** In the carried block, but not the one photo the cursor is holding. */
-function isCarried(index: number): boolean {
-  const carried = block.value;
-  if (!carried || !drag.dragging.value) return false;
-  const start = drag.draggingIndex.value - carried.offset;
-  const end = start + carried.entries.length;
-  return index >= start && index < end && index !== drag.draggingIndex.value;
-}
-
-/**
- * Anything in the grid that is not a photograph is background: the gaps, the
- * padding, the letterboxing beside a tall photo, the space under the last row.
- * The tiles stop their own clicks, so whatever reaches here missed them all.
- */
-function onBackgroundClick(event: MouseEvent): void {
-  if ((event.target as HTMLElement | null)?.closest("[data-select-target]")) return;
-  gallery.clearSelection();
 }
 
 /** Where a tile is on screen, for the large view's open/close animation. */
@@ -221,7 +185,7 @@ function getTileRect(name: string): DOMRect | null {
 
 // Keep the selection on screen as it moves, whether by arrow key or by sort.
 watch(
-  () => gallery.selectedName.value,
+  () => gallery.cursorName.value,
   async (name) => {
     if (!name || drag.dragging.value) return;
     await nextTick();
@@ -242,7 +206,7 @@ defineExpose({ scroller, getTileRect });
   <div
     ref="scroller"
     class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
-    @click="onBackgroundClick"
+    @click="onGridClick"
   >
     <TransitionGroup
       ref="gridRoot"
@@ -261,15 +225,14 @@ defineExpose({ scroller, getTileRect });
         :entry="entry"
         :cache="gallery.thumbnails"
         :selected="gallery.selectedNames.value.has(entry.name)"
-        :cursor="entry.name === gallery.selectedName.value"
+        :cursor="entry.name === gallery.cursorName.value"
         :preview-name="previewNames?.get(entry.name)"
         :removing="gallery.removingNames.value.has(entry.name)"
         :dragging="index === drag.draggingIndex.value && drag.dragging.value"
-        :carried="isCarried(index)"
-        :carry-count="index === drag.draggingIndex.value ? block?.entries.length : undefined"
+        :carried="drag.carries(index)"
+        :carry-count="carried.length"
         :translate="drag.translate.value"
         :draggable="rename.active.value"
-        @select="onSelect(entry.name, $event)"
         @activate="aperture.openLargeView()"
         @drag-start="drag.onPointerDown($event, index)"
       />

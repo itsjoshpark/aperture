@@ -2,7 +2,7 @@ import { computed, inject, ref, shallowRef, type InjectionKey } from "vue";
 import { createFsaFolderSource, type FolderSource } from "@/lib/fs/folder-source";
 import { isFileSystemAccessSupported } from "@/lib/fs/fsa-adapter";
 import type { FileSystemPort, ImageEntry } from "@/lib/fs/types";
-import type { MoveDirection } from "@/lib/grid-geometry";
+import { clamp, type MoveDirection } from "@/lib/grid-geometry";
 import { useGallery } from "./useGallery";
 import { useReducedMotion, wait } from "./useReducedMotion";
 import { useRenameSession } from "./useRenameSession";
@@ -85,6 +85,34 @@ export function createAperture(options: ApertureOptions = {}) {
 
   function moveSelectionBy(direction: MoveDirection, extend = false): void {
     gallery.moveBy(direction, columns.value, displayed.value, extend);
+  }
+
+  // ------------------------------------------------------------------ arrange
+
+  /**
+   * Nudge the whole selection along the grid, entering rename mode on the first
+   * press the way the first drag of a tile does.
+   *
+   * A scattered selection is gathered into one run, so repeated presses move an
+   * arrangement rather than dealing the photos out one at a time. Where that run
+   * starts from is the cursor: it is the photo the arrows have been moving, and
+   * so the one the eye is following.
+   */
+  function nudgeSelection(delta: number): void {
+    if (!rename.active.value) enterRename();
+
+    const list = displayed.value;
+    const run = selectedEntries.value;
+    if (run.length === 0) return;
+
+    const first = list.indexOf(run[0]!);
+    const contiguous = run.every((entry, at) => list[first + at] === entry);
+    const last = list.length - run.length;
+    const from = contiguous ? first : clamp(selectedIndex.value, 0, last);
+
+    const to = clamp(from + delta, 0, last);
+    if (contiguous && to === from) return;
+    rename.moveRun(run, to);
   }
 
   function openLargeView(): void {
@@ -170,6 +198,7 @@ export function createAperture(options: ApertureOptions = {}) {
     openFolder,
     closeFolder,
     moveSelectionBy,
+    nudgeSelection,
     openLargeView,
     closeLargeView,
     askToDelete,

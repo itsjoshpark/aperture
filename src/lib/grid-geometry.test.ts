@@ -6,7 +6,6 @@ import {
   indexToCell,
   moveSelection,
   gatherRun,
-  reorder,
   stopIndexFor,
   tileSizeStops,
 } from "./grid-geometry";
@@ -220,33 +219,6 @@ describe("hitTest", () => {
   });
 });
 
-describe("reorder", () => {
-  it("moves an item later", () => {
-    expect(reorder(["a", "b", "c", "d"], 0, 2)).toEqual(["b", "c", "a", "d"]);
-  });
-
-  it("moves an item earlier", () => {
-    expect(reorder(["a", "b", "c", "d"], 3, 1)).toEqual(["a", "d", "b", "c"]);
-  });
-
-  it("does not mutate the input", () => {
-    const items = ["a", "b", "c"];
-    reorder(items, 0, 2);
-
-    expect(items).toEqual(["a", "b", "c"]);
-  });
-
-  it("returns the same array when nothing moves", () => {
-    const items = ["a", "b", "c"];
-
-    expect(reorder(items, 1, 1)).toBe(items);
-  });
-
-  it("clamps a target past the end", () => {
-    expect(reorder(["a", "b", "c"], 0, 99)).toEqual(["b", "c", "a"]);
-  });
-});
-
 describe("gatherRun", () => {
   it("moves a contiguous run later", () => {
     expect(gatherRun(["a", "b", "c", "d", "e"], ["b", "c"], 2)).toEqual(["a", "d", "b", "c", "e"]);
@@ -274,8 +246,8 @@ describe("gatherRun", () => {
     expect(gatherRun(["a", "b", "c", "d"], ["a", "b"], 99)).toEqual(["c", "d", "a", "b"]);
   });
 
-  it("behaves like reorder for a run of one", () => {
-    expect(gatherRun(["a", "b", "c", "d"], ["a"], 2)).toEqual(reorder(["a", "b", "c", "d"], 0, 2));
+  it("moves a run of one, the way a single-tile drag does", () => {
+    expect(gatherRun(["a", "b", "c", "d"], ["a"], 2)).toEqual(["b", "c", "a", "d"]);
   });
 
   it("does not mutate the input", () => {

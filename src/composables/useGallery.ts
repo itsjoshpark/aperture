@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from "vue";
 import type { FileSystemPort, ImageEntry } from "@/lib/fs/types";
-import { moveSelection, type MoveDirection } from "@/lib/grid-geometry";
+import { clamp, moveSelection, type MoveDirection } from "@/lib/grid-geometry";
 import { createPreviewSource } from "@/lib/preview/renderer";
 import { findLeftoverTempNames } from "@/lib/rename-engine";
 import { DEFAULT_SORT, sortEntries, type SortOrder } from "@/lib/sort";
@@ -28,7 +28,7 @@ const TILE_SIZE_KEY = "aperture:tile-size";
  */
 export function clampTileSize(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_TILE_SIZE;
-  return Math.min(MAX_TILE_SIZE, Math.max(MIN_TILE_SIZE, Math.round(value)));
+  return clamp(Math.round(value), MIN_TILE_SIZE, MAX_TILE_SIZE);
 }
 
 export function readStoredTileSize(): number {
@@ -50,6 +50,9 @@ function storeTileSize(value: number): void {
     // Private browsing, a full quota — the slider still works, it just forgets.
   }
 }
+
+/** How many deletes are in flight at once. Matches the EXIF reader's reasoning. */
+const DELETE_CONCURRENCY = 8;
 
 export type GalleryView = "grid" | "large";
 
@@ -80,7 +83,7 @@ export function useGallery() {
    * undoing all reshuffle the list, and every one of them should leave the same
    * photos selected.
    */
-  const selectedNames = ref<Set<string>>(new Set());
+  const selectedNames = shallowRef<Set<string>>(new Set());
 
   /**
    * The one selected photo the rest of the app still thinks in terms of: where
@@ -100,7 +103,7 @@ export function useGallery() {
    * Set while tiles are playing their removal animation, so the grid can shrink
    * them out before the array changes and the survivors slide up.
    */
-  const removingNames = ref<Set<string>>(new Set());
+  const removingNames = shallowRef<Set<string>>(new Set());
 
   watch(tileSize, storeTileSize);
 
@@ -216,7 +219,7 @@ export function useGallery() {
 
   /** `Shift` + click: the range from the anchor to here, replacing what was selected. */
   function extendTo(name: string, list: ImageEntry[]): void {
-    const from = anchorName.value ?? cursorName.value ?? name;
+    const from = anchorName.value ?? name;
     setSelection(rangeIn(list, from, name), name, from);
   }
 
@@ -236,12 +239,8 @@ export function useGallery() {
     const name = list[next]?.name;
     if (name === undefined) return;
 
-    if (!extend) {
-      select(name);
-      return;
-    }
-    const anchor = anchorName.value ?? cursorName.value ?? name;
-    setSelection(rangeIn(list, anchor, name), name, anchor);
+    if (extend) extendTo(name, list);
+    else select(name);
   }
 
   /** Every name between two entries of `list`, inclusive, in list order. */
@@ -278,41 +277,50 @@ export function useGallery() {
     const active = port.value;
     if (!active || names.length === 0) return;
 
-    // Worked out before anything goes, while the list still says which survivor
-    // follows the last of them: the photo after the deleted run, or the one
-    // before it when the run reached the end.
+    // Worked out before anything goes, while the list still holds both sides:
+    // the photo nearest the end of what is leaving is where the selection lands,
+    // so holding Delete walks a cull along rather than dropping you back at the
+    // top of the folder.
     const doomed = new Set(names);
-    const last = list.reduce((at, entry, index) => (doomed.has(entry.name) ? index : at), -1);
-    const survivor =
-      list.slice(last + 1).find((entry) => !doomed.has(entry.name)) ??
-      list
-        .slice(0, last)
-        .reverse()
-        .find((entry) => !doomed.has(entry.name)) ??
-      null;
+    const surviving = new Set<string>();
+    let lastDoomed: string | null = null;
+    for (const entry of list) {
+      if (doomed.has(entry.name)) lastDoomed = entry.name;
+      else surviving.add(entry.name);
+    }
+    const survivor = lastDoomed === null ? null : nearestIn(list, lastDoomed, surviving);
 
-    // One file failing must not strand the ones already off the disk in the
-    // grid, so the lists are rebuilt from what actually went and the failure is
-    // raised afterwards.
+    // Overlapped, and capped for the same reason `readDatesTaken` is: culling a
+    // couple of hundred shots one round-trip at a time is a visible wait, and
+    // opening a thousand at once thrashes the disk. One file failing must not
+    // strand the ones already gone in the grid, so the lists are rebuilt from
+    // what actually went and the failure is raised afterwards.
     const gone = new Set<string>();
     let failure: unknown = null;
-    for (const name of names) {
-      try {
-        await active.delete(name);
-      } catch (cause) {
-        failure ??= cause;
-        continue;
+    let next = 0;
+
+    const worker = async (): Promise<void> => {
+      while (next < names.length) {
+        const name = names[next++]!;
+        try {
+          await active.delete(name);
+        } catch (cause) {
+          failure ??= cause;
+          continue;
+        }
+        thumbnails.invalidate(name);
+        gone.add(name);
       }
-      thumbnails.invalidate(name);
-      gone.add(name);
-    }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(DELETE_CONCURRENCY, names.length) }, worker));
 
     entries.value = entries.value.filter((entry) => !gone.has(entry.name));
     // Deleting does not re-list the folder, so this is what keeps the name list
     // honest in between refreshes.
     allNames.value = allNames.value.filter((existing) => !gone.has(existing));
 
-    select(survivor?.name ?? null);
+    select(survivor);
     if (failure !== null) throw failure;
   }
 
@@ -327,8 +335,12 @@ export function useGallery() {
     loading,
     error,
     selectedNames,
-    /** The cursor, under the name the single-photo views have always known it by. */
-    selectedName: computed(() => cursorName.value),
+    /**
+     * The cursor, read-only. Named apart from `selectedNames` on purpose: a
+     * surface that wants "the selected photo" and reaches for a near-homonym of
+     * the set would silently act on one arbitrary member of a selection of ten.
+     */
+    cursorName: computed(() => cursorName.value),
     removingNames,
     leftoverTempNames,
     thumbnails,

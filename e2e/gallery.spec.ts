@@ -34,6 +34,20 @@ const clickTile = (page: Page, name: string, modifiers?: ("Meta" | "Shift")[]) =
   tile(page, name)
     .locator("img")
     .click(modifiers ? { modifiers } : undefined);
+
+/**
+ * Drag one tile onto another's cell. Two moves, not one: the first has to cross
+ * `DRAG_THRESHOLD` before the press counts as a drag at all, and only the second
+ * lands it — so a single `move()` reorders nothing and reads as a broken grid.
+ */
+async function dragTile(page: Page, from: string, to: string): Promise<void> {
+  await tile(page, from).hover();
+  await page.mouse.down();
+  const box = (await tile(page, to).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
+  await page.mouse.move(box.x + 4, box.y + 4, { steps: 4 });
+  await page.mouse.up();
+}
 /**
  * What actually landed "on disk". The specs typecheck under the Node config,
  * which has no DOM lib, so the harness hooks are described here rather than
@@ -476,13 +490,7 @@ test.describe("rename", () => {
       return seen;
     });
 
-    const source = tile(page, "d.jpg");
-    const target = tile(page, "a.jpg");
-    await source.hover();
-    await page.mouse.down();
-    const box = (await target.boundingBox())!;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 6 });
-    await page.mouse.up();
+    await dragTile(page, "d.jpg", "a.jpg");
 
     expect(await watching).toEqual({ displaced: true, lifted: false });
     await expect(page.getByRole("gridcell")).toHaveText([/d\.jpg/, /a\.jpg/, /b\.jpg/, /c\.jpg/]);
@@ -492,17 +500,12 @@ test.describe("rename", () => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
     // Drag the last tile onto the first cell.
-    const source = tile(page, "c.jpg");
-    const target = tile(page, "a.jpg");
-    await source.hover();
+    // Held mid-drag, so the cell the tile would land in is outlined.
+    await tile(page, "c.jpg").hover();
     await page.mouse.down();
-    const box = (await target.boundingBox())!;
-    // Two moves: the first crosses the drag threshold, the second lands.
+    const box = (await tile(page, "a.jpg").boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
-
-    // Mid-drag, the cell the tile would land in is outlined.
     await expect(page.locator("[data-drop-placeholder]")).toBeVisible();
-
     await page.mouse.move(box.x + 4, box.y + 4, { steps: 4 });
     await page.mouse.up();
 
@@ -551,16 +554,12 @@ test.describe("rename", () => {
     await clickTile(page, "b.jpg");
     await clickTile(page, "d.jpg", ["Meta"]);
 
-    const source = tile(page, "d.jpg");
-    const target = tile(page, "a.jpg");
-    await source.hover();
+    // Held mid-drag, because the lifted card says how many it is carrying.
+    await tile(page, "d.jpg").hover();
     await page.mouse.down();
-    const box = (await target.boundingBox())!;
+    const box = (await tile(page, "a.jpg").boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
-
-    // The lifted card says how many it is carrying.
     await expect(page.locator("[data-tile-card][data-dragging]")).toContainText("2");
-
     await page.mouse.move(box.x + 4, box.y + 4, { steps: 4 });
     await page.mouse.up();
 
@@ -582,14 +581,7 @@ test.describe("rename", () => {
 
     await clickTile(page, "a.jpg");
 
-    const source = tile(page, "c.jpg");
-    const target = tile(page, "a.jpg");
-    await source.hover();
-    await page.mouse.down();
-    const box = (await target.boundingBox())!;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
-    await page.mouse.move(box.x + 4, box.y + 4, { steps: 4 });
-    await page.mouse.up();
+    await dragTile(page, "c.jpg", "a.jpg");
 
     await expect(page.getByRole("gridcell")).toHaveText([/c\.jpg/, /a\.jpg/, /b\.jpg/]);
     await expect(selected(page)).toHaveText([/c\.jpg/]);

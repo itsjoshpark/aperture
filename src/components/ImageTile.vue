@@ -19,14 +19,13 @@ const props = defineProps<{
   dragging?: boolean;
   /** Selected, and coming along with a drag the cursor is carrying elsewhere. */
   carried?: boolean;
-  /** How many photos the lifted card is carrying; only set on a multi-tile drag. */
+  /** How many photos the drag is carrying. Only the lifted card shows it, and only above one. */
   carryCount?: number;
   draggable?: boolean;
   translate?: { x: number; y: number };
 }>();
 
 const emit = defineEmits<{
-  select: [event: MouseEvent];
   activate: [];
   dragStart: [event: PointerEvent];
 }>();
@@ -179,6 +178,7 @@ defineExpose({
   <div
     ref="root"
     role="gridcell"
+    :data-name="entry.name"
     :aria-hidden="removing || undefined"
     :aria-selected="selected && !removing"
     :tabindex="cursor && !removing ? 0 : -1"
@@ -258,7 +258,7 @@ defineExpose({
         looks like it is moving one file and then moves several.
       -->
       <span
-        v-if="carryCount && carryCount > 1"
+        v-if="dragging && carryCount && carryCount > 1"
         aria-hidden="true"
         class="absolute -top-1.5 -right-1.5 z-10 min-w-5 rounded-full bg-foreground px-1.5 py-0.5 text-center text-[10px] leading-none font-semibold text-background shadow-sm"
       >
@@ -292,7 +292,6 @@ defineExpose({
             )
           "
           :style="photoBox"
-          @click.stop="emit('select', $event)"
         >
           <!-- White, because on a wall of bare photographs against dark chrome it
                is the only thing that cannot be mistaken for part of an image.
@@ -363,12 +362,7 @@ defineExpose({
         below it: side by side, the arrow and the struck-through original eat
         most of the width and truncate away the only part you are checking.
       -->
-      <div
-        data-select-target
-        class="mt-1.5 min-w-0 text-center"
-        :title="entry.name"
-        @click.stop="emit('select', $event)"
-      >
+      <div data-select-target class="mt-1.5 min-w-0 text-center" :title="entry.name">
         <!--
           Lifted, the name is carried over other people's photographs with
           nothing behind it, so each line takes a backing of its own.

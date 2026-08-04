@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef } from "vue";
 import type { ImageEntry } from "@/lib/fs/types";
-import { gatherRun, reorder } from "@/lib/grid-geometry";
+import { gatherRun } from "@/lib/grid-geometry";
 import { buildRenamePlan, DEFAULT_RENAME_OPTIONS, type RenameOptions } from "@/lib/naming";
 import {
   buildUndoSteps,
@@ -79,10 +79,6 @@ export function useRenameSession(gallery: Gallery) {
     draft.value = [...order];
     initialNames.value = order.map((entry) => entry.name);
     failure.value = null;
-  }
-
-  function move(from: number, to: number): void {
-    draft.value = reorder(draft.value, from, to);
   }
 
   /** Move a whole selection, as one block, so that it begins at `to`. */
@@ -202,7 +198,6 @@ export function useRenameSession(gallery: Gallery) {
     failure,
     reordered,
     begin,
-    move,
     moveRun,
     setOrder,
     forget,

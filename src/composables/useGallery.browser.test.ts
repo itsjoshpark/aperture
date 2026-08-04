@@ -59,9 +59,10 @@ test("falls back to the default when the stored value is not a size", () => {
  */
 describe("selection", () => {
   async function openFolder(names = ["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]) {
+    const port = new MemoryAdapter(names);
     const gallery = useGallery();
-    await gallery.open(new MemoryAdapter(names));
-    return gallery;
+    await gallery.open(port);
+    return Object.assign(gallery, { port: gallery.port, adapter: port });
   }
 
   const names = (gallery: Awaited<ReturnType<typeof openFolder>>) =>
@@ -71,7 +72,7 @@ describe("selection", () => {
     const gallery = await openFolder();
 
     expect(names(gallery)).toEqual([]);
-    expect(gallery.selectedName.value).toBeNull();
+    expect(gallery.cursorName.value).toBeNull();
   });
 
   test("lands the first arrow press on the first image", async () => {
@@ -79,7 +80,7 @@ describe("selection", () => {
 
     gallery.moveBy("right", 3, gallery.sorted.value);
 
-    expect(gallery.selectedName.value).toBe("a.jpg");
+    expect(gallery.cursorName.value).toBe("a.jpg");
   });
 
   test("replaces the selection on a plain select", async () => {
@@ -111,7 +112,7 @@ describe("selection", () => {
     gallery.toggle("d.jpg", gallery.sorted.value);
 
     expect(names(gallery)).toEqual(["a.jpg"]);
-    expect(gallery.selectedName.value).toBe("a.jpg");
+    expect(gallery.cursorName.value).toBe("a.jpg");
   });
 
   test("leaves no cursor once the last photo is toggled off", async () => {
@@ -121,7 +122,7 @@ describe("selection", () => {
     gallery.toggle("b.jpg", gallery.sorted.value);
 
     expect(names(gallery)).toEqual([]);
-    expect(gallery.selectedName.value).toBeNull();
+    expect(gallery.cursorName.value).toBeNull();
   });
 
   test("selects a range in either direction", async () => {
@@ -131,7 +132,7 @@ describe("selection", () => {
     gallery.extendTo("b.jpg", gallery.sorted.value);
 
     expect(names(gallery)).toEqual(["b.jpg", "c.jpg", "d.jpg"]);
-    expect(gallery.selectedName.value).toBe("b.jpg");
+    expect(gallery.cursorName.value).toBe("b.jpg");
   });
 
   test("redraws each range from the same anchor, so it can shrink again", async () => {
@@ -178,7 +179,7 @@ describe("selection", () => {
 
     expect(gallery.sorted.value.map((entry) => entry.name)).toEqual(["a.jpg", "d.jpg", "e.jpg"]);
     expect(gallery.allNames.value).not.toContain("b.jpg");
-    expect(gallery.selectedName.value).toBe("d.jpg");
+    expect(gallery.cursorName.value).toBe("d.jpg");
   });
 
   test("falls back to the photo before a run deleted off the end", async () => {
@@ -186,23 +187,21 @@ describe("selection", () => {
 
     await gallery.removeMany(["d.jpg", "e.jpg"], gallery.sorted.value);
 
-    expect(gallery.selectedName.value).toBe("c.jpg");
+    expect(gallery.cursorName.value).toBe("c.jpg");
   });
 
   test("drops names that a refresh no longer finds", async () => {
-    const port = new MemoryAdapter(["a.jpg", "b.jpg", "c.jpg"]);
-    const gallery = useGallery();
-    await gallery.open(port);
+    const gallery = await openFolder(["a.jpg", "b.jpg", "c.jpg"]);
 
     gallery.select("a.jpg");
     gallery.extendTo("c.jpg", gallery.sorted.value);
 
     // Renamed out from under the selection, as an apply does to all of them.
-    await port.delete("b.jpg");
+    await gallery.adapter.delete("b.jpg");
     await gallery.refresh();
 
     expect(names(gallery)).toEqual(["a.jpg", "c.jpg"]);
-    expect(gallery.selectedName.value).toBe("c.jpg");
+    expect(gallery.cursorName.value).toBe("c.jpg");
   });
 
   test("clears everything at once", async () => {
@@ -213,6 +212,6 @@ describe("selection", () => {
     gallery.clearSelection();
 
     expect(names(gallery)).toEqual([]);
-    expect(gallery.selectedName.value).toBeNull();
+    expect(gallery.cursorName.value).toBeNull();
   });
 });

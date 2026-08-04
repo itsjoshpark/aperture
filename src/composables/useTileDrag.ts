@@ -1,5 +1,5 @@
 import { nextTick, onScopeDispose, ref, shallowRef } from "vue";
-import { hitTest, type GridMetrics } from "@/lib/grid-geometry";
+import { clamp, hitTest, type GridMetrics } from "@/lib/grid-geometry";
 
 /**
  * Drag-to-reorder, built on Pointer Events rather than a library.
@@ -38,22 +38,26 @@ export interface TileDragOptions {
   /** Grid content-box origin, in viewport coordinates. */
   gridOrigin: () => { x: number; y: number };
   /**
-   * Called once when a press turns into a drag. Enters rename mode.
-   *
-   * May return a corrected index: dragging a multi-tile selection gathers it
-   * into a contiguous block first, which moves the pressed tile out from under
-   * the index it was pressed at.
+   * Called once when a press turns into a drag. Enters rename mode, and says
+   * how much is coming along: a selection of several travels as one run, and
+   * `offset` is where the pressed tile sits inside it. Defaults to a run of one.
    */
-  onBegin: (index: number) => number | void | Promise<number | void>;
+  onBegin: (index: number) => DragRun | void | Promise<DragRun | void>;
   /**
-   * Called whenever the dragged tile should change position. Returns the index
-   * the tile actually took, which is not the one asked for when a block of
-   * several has been clamped against the end of the list.
+   * Called whenever the run should begin at a different index — including once
+   * on the way in, which is what gathers a scattered selection together.
    */
-  onMove: (from: number, to: number) => number | void;
+  onMove: (start: number) => void;
   onEnd?: () => void;
   /** Called if the drag is abandoned with Escape. */
   onCancel?: () => void;
+}
+
+/** The contiguous block of tiles a drag is carrying. */
+export interface DragRun {
+  size: number;
+  /** Which tile of the run is under the cursor. */
+  offset: number;
 }
 
 export function useTileDrag(options: TileDragOptions) {
@@ -64,6 +68,11 @@ export function useTileDrag(options: TileDragOptions) {
    * as its placeholder.
    */
   const draggingIndex = ref(-1);
+  /**
+   * What is being carried. A single tile is a run of one, so there is one path
+   * through the maths below rather than a special case beside it.
+   */
+  const run = ref<DragRun>({ size: 1, offset: 0 });
   /** Offset of the lifted card from its cell. Applied inside the tile, not to it. */
   const translate = ref({ x: 0, y: 0 });
   /**
@@ -78,6 +87,8 @@ export function useTileDrag(options: TileDragOptions) {
   let grabOffset = { x: 0, y: 0 };
   let pointer = { x: 0, y: 0 };
   let frame = 0;
+  let justDropped = false;
+  let dropTimer: ReturnType<typeof setTimeout> | undefined;
 
   function onPointerDown(event: PointerEvent, index: number): void {
     // Left button / primary contact only; a right-click is a context menu.
@@ -112,8 +123,12 @@ export function useTileDrag(options: TileDragOptions) {
       // Capture so the drag survives the pointer leaving the tile — which it
       // does immediately, because the tile moves out from under it.
       element.value?.setPointerCapture(pointerId);
-      const corrected = await options.onBegin(draggingIndex.value);
-      if (typeof corrected === "number") draggingIndex.value = corrected;
+      run.value = (await options.onBegin(draggingIndex.value)) ?? { size: 1, offset: 0 };
+      // Placing the run is the same move as every later one, so a scattered
+      // selection is gathered by the ordinary path rather than by `onBegin`.
+      // Unconditional: a selection with gaps in it needs collecting even when
+      // that leaves the run beginning exactly where the pressed tile already is.
+      placeRun(startFor(draggingIndex.value));
       schedule();
       return;
     }
@@ -147,15 +162,34 @@ export function useTileDrag(options: TileDragOptions) {
       options.count(),
     );
 
-    if (target >= 0 && target !== draggingIndex.value) {
-      const landed = options.onMove(draggingIndex.value, target);
-      draggingIndex.value = typeof landed === "number" ? landed : target;
+    const start = target >= 0 ? startFor(target) : runStart();
+    if (start !== runStart()) {
+      placeRun(start);
       // The tile only reaches its new cell when Vue flushes, which is after this
       // frame has computed the offset. Re-measure on the far side of that flush,
       // still before the paint, or the card is drawn a cell out of place for the
       // frame the reorder lands on.
       void nextTick(follow);
     }
+  }
+
+  /**
+   * Where the run has to begin for the tile under the cursor to sit at `index`.
+   * Clamped here and nowhere else: a run of several cannot start so late that
+   * its tail would fall off the end of the list.
+   */
+  function startFor(index: number): number {
+    return clamp(index - run.value.offset, 0, options.count() - run.value.size);
+  }
+
+  /** Where the run begins now. */
+  function runStart(): number {
+    return draggingIndex.value - run.value.offset;
+  }
+
+  function placeRun(start: number): void {
+    options.onMove(start);
+    draggingIndex.value = start + run.value.offset;
   }
 
   /** Put the card back under the cursor, wherever its cell has ended up. */
@@ -187,7 +221,7 @@ export function useTileDrag(options: TileDragOptions) {
     if (delta === 0) return;
 
     const limit = Math.max(0, options.contentHeight() - scroller.clientHeight);
-    const next = Math.min(Math.max(scroller.scrollTop + delta, 0), limit);
+    const next = clamp(scroller.scrollTop + delta, 0, limit);
     if (next === scroller.scrollTop) return;
 
     scroller.scrollTop = next;
@@ -214,28 +248,17 @@ export function useTileDrag(options: TileDragOptions) {
     stop();
   }
 
-  /**
-   * A pointerup that ends a drag still dispatches a `click`, retargeted by the
-   * pointer capture onto the cell — which the grid would read as a click that
-   * missed every photo, and clear the selection you just dragged. Swallow
-   * exactly one, and only after a press that really became a drag.
-   */
-  function swallowNextClick(): void {
-    const listener = (event: MouseEvent) => {
-      event.stopPropagation();
-      disarm();
-    };
-    const disarm = () => {
-      clearTimeout(timer);
-      window.removeEventListener("click", listener, true);
-    };
-    // No click arrives at all if the pointer came up outside the window.
-    const timer = setTimeout(disarm, 0);
-    window.addEventListener("click", listener, true);
-  }
-
   function stop(): void {
-    if (dragging.value) swallowNextClick();
+    if (dragging.value) {
+      // A pointerup that ends a drag still dispatches a `click`, retargeted by
+      // the pointer capture onto the cell. Whoever would read that as a fresh
+      // click has one turn of the event loop to know better.
+      justDropped = true;
+      clearTimeout(dropTimer);
+      dropTimer = setTimeout(() => {
+        justDropped = false;
+      }, 0);
+    }
 
     if (frame !== 0) {
       cancelAnimationFrame(frame);
@@ -254,6 +277,7 @@ export function useTileDrag(options: TileDragOptions) {
     pointerId = -1;
     element.value = null;
     draggingIndex.value = -1;
+    run.value = { size: 1, offset: 0 };
     translate.value = { x: 0, y: 0 };
   }
 
@@ -264,6 +288,17 @@ export function useTileDrag(options: TileDragOptions) {
     translate,
     /** True once the press has actually become a drag, not merely a click. */
     dragging,
+    /**
+     * In the run being carried, but not the one tile under the cursor — the
+     * others stay in their cells and are drawn as coming along.
+     */
+    carries: (index: number) =>
+      dragging.value &&
+      index !== draggingIndex.value &&
+      index >= runStart() &&
+      index < runStart() + run.value.size,
+    /** Whether the click now arriving is the one a just-ended drag left behind. */
+    justDropped: () => justDropped,
     onPointerDown,
     cancel: () => {
       options.onCancel?.();

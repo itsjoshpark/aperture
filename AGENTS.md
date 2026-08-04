@@ -97,7 +97,7 @@ refreshed listing. Anything keeping a session alive across a disk change must do
 images or not — is what rename mode checks targets against, and a session outlives changes to the
 folder. Copying it into the session at `begin()` meant deleting a file left the bar refusing a name
 nothing held any more, with no way out but restarting. Any operation that changes folder contents
-must update `allNames`, the way `remove()` and `refresh()` do.
+must update `allNames`, the way `removeMany()` and `refresh()` do.
 
 ### Dates
 
@@ -182,12 +182,14 @@ only translates, and half of that one is the tiles changing size. Three things i
 - **The scroller is `overflow-x-hidden`.** A transform counts towards scrollable overflow, and cards
   mid-shrink are wider than the cells they are shrinking into.
 
-**A multi-tile drag is gathered into a contiguous block before it moves.** `useTileDrag` tracks one
-index and one lifted card, and that stays true for a selection of twelve: `GalleryGrid`'s `onBegin`
-reorders the draft so the selection sits as one run around the pressed tile, and returns the corrected
-index. From there the block moves through `gatherRun` as a unit, the tiles beside the cursor are the
-`carried` ones, and what the grid shows mid-drag is what the drop produces. Keeping the run contiguous
-is what lets `hitTest` go on answering with a single cell.
+**A drag always carries a run, and one tile is a run of one.** There is no single-tile path beside
+the block path: `onBegin` says how many are coming and where the pressed tile sits inside them,
+`useTileDrag` owns the run from there — it does the one clamp (`startFor`), calls `onMove(start)` in
+run coordinates, and answers `carries(index)` for the tiles travelling beside the cursor. The grid
+only turns a start index into `gatherRun`. Two things follow. The first `onMove` is unconditional,
+because a selection with gaps in it needs collecting even when that leaves the run beginning exactly
+where the pressed tile already is. And keeping the run contiguous from then on is what lets `hitTest`
+go on answering with a single cell.
 
 **`Cmd`/`Ctrl` + `O` sits above the rest of the key map, deliberately.** `useKeyboard` returns early
 when there is no folder, so inside the `switch` the chord would work only once a folder was already
@@ -211,24 +213,34 @@ on the `<img>` restores the square and breaks both — the border boxes in empty
 starts at the wrong width for every photo that is taller than it is wide. Nothing outside
 `ImageTile.browser.test.ts` fails when it does.
 
-**The photograph is also the only thing a click selects.** The photo box and the caption carry
-`data-select-target` and stop their own clicks; everything else — the letterboxing, the gaps, the
-padding, below the last row — falls through to `GalleryGrid`, which reads it as background and clears
-the selection. So the two halves are one mechanism: widening the hit target back to the square would
-silently remove the only place left to click to deselect. Overlays drawn over the photo box (the
-decode shimmer, the "No preview" fallback) must stay `pointer-events-none`, or they swallow the click
-for exactly the tiles that have no `<img>` to aim at.
+**The photograph is also the only thing a click selects, and one handler decides that.** Every click
+in the grid reaches `GalleryGrid.onGridClick`, which asks one question: did it land inside a
+`data-select-target` — the photo box or the caption — or on background? Background is the
+letterboxing, the gaps, the padding and everything below the last row, and background clears the
+selection. Tiles do not handle their own clicks; they only mark which of their parts is the
+photograph, so adding a selectable region is one attribute and no second step. Two consequences worth
+keeping: widening the hit target back to the square removes the only place left to click to deselect,
+and overlays drawn over the photo box (the decode shimmer, the "No preview" fallback) must stay
+`pointer-events-none`, or they swallow the click for exactly the tiles that have no `<img>` to aim at.
 
 **A pointerup that ends a drag still fires a `click`**, retargeted by the pointer capture onto the
 cell — which is not a select target, so the grid would read it as background and clear the selection
-you just dragged. `useTileDrag` swallows exactly one click after a press that really became a drag.
+you just dragged. `useTileDrag` raises `justDropped()` for one turn of the event loop and the grid's
+click handler consults it. Scoped rather than swallowed globally: suppressing the click everywhere
+would eat it for the toolbar and any future drop target too.
 
 **The selection is a set, a cursor and an anchor, written only by `setSelection`.** The cursor is what
-every single-photo surface means by "selected" (large view, filmstrip, `getTileRect`) and it is
-exported under the old name `selectedName`; the anchor is where a `Shift` range starts and is held
-apart from the cursor, so each range is redrawn from the same place instead of extending from the last
-one. The invariant the single writer exists to keep: the cursor and the anchor are members of the set,
-or the set is empty and both are null.
+every single-photo surface means by "selected" (large view, filmstrip, `getTileRect`); the anchor is
+where a `Shift` range starts and is held apart from the cursor, so each range is redrawn from the same
+place instead of extending from the last one. The invariant the single writer exists to keep: the
+cursor and the anchor are members of the set, or the set is empty and both are null. The cursor ships
+as `cursorName`, deliberately not a near-homonym of `selectedNames` — a surface that wants "the
+selected photo" and grabs the wrong one would silently act on one arbitrary member of a selection.
+
+**`gatherRun` moves a selection; nothing moves a single index.** It lifts entries out of the list
+wherever they are scattered and puts them back as one block, so the drag, the `Cmd`+arrow nudge and
+the initial gather are one operation with one set of edge cases. `useAperture.nudgeSelection` is where
+the keyboard's version lives — a key map should not be doing index arithmetic against layout maths.
 
 **Nothing a drag draws may be card-shaped.** The card is always a square and photographs are every
 shape, so a surface on the card is a dark rectangle around a picture that does not fill it. The lifted
