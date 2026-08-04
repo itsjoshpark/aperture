@@ -57,8 +57,12 @@ async function pngOf(width: number, height: number): Promise<Uint8Array> {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-function mount(entry = entryFor(), cache = new ThumbnailCache()) {
-  return render(ImageTile, { props: { entry, cache, selected: false } });
+function mount(
+  entry = entryFor(),
+  cache = new ThumbnailCache(),
+  props: Record<string, unknown> = {},
+) {
+  return render(ImageTile, { props: { entry, cache, selected: false, ...props } });
 }
 
 test("shows the image", async () => {
@@ -110,12 +114,77 @@ test("leaves a placeholder in the cell and offsets the card", async () => {
   const cellNow = cell.getBoundingClientRect();
   expect(cellNow.left).toBeCloseTo(atRest.left, 0);
   expect(cellNow.top).toBeCloseTo(atRest.top, 0);
-  expect(placeholder!.getBoundingClientRect().width).toBeCloseTo(cellNow.width, 0);
+
+  // And it stops above the caption rather than boxing the whole cell in.
+  expect(placeholder!.getBoundingClientRect().bottom).toBeLessThan(
+    screen.getByText("photo.png").element().getBoundingClientRect().top,
+  );
 
   // The card has.
   const lifted = card.getBoundingClientRect();
   expect(lifted.left - cellNow.left).toBeCloseTo(translate.x, 0);
   expect(lifted.top - cellNow.top).toBeCloseTo(translate.y, 0);
+});
+
+/**
+ * The dashed outline and the selection band are the same claim drawn twice —
+ * this is where the photo will be, this is the photo you have — so they have to
+ * land on the same pixels. A wide photo is what makes that a real test: boxing
+ * the cell instead of the picture is invisible on a square one.
+ */
+test("puts the drop placeholder exactly where the selection border will be", async () => {
+  const { cell, cellRect, border } = await selectedTile("wide.png", await pngOf(400, 120), {
+    dragging: true,
+    translate: { x: 0, y: 0 },
+  });
+
+  const placeholder = cell.querySelector("[data-drop-placeholder]")!;
+  expect(getComputedStyle(placeholder).borderTopWidth).toBe("3px");
+
+  const ghost = placeholder.getBoundingClientRect();
+  for (const edge of ["left", "top", "right", "bottom"] as const) {
+    expect(ghost[edge]).toBeCloseTo(border[edge], 0);
+  }
+
+  // Which is to say: round the photograph, not round the square it sits in.
+  expect(ghost.height).toBeLessThan(cellRect.width);
+});
+
+/**
+ * A lifted tile has to read as picked up without reading as a card: photographs
+ * are every shape and the card is always a square, so a surface drawn on the
+ * card shows a dark rectangle around a photo that does not fill it. The shadow
+ * belongs to the picture instead.
+ */
+test("lifts the photograph, not a square card behind it", async () => {
+  const { cell, cellRect, photoBox } = await selectedTile("wide.png", await pngOf(400, 120), {
+    dragging: true,
+    translate: { x: 0, y: 0 },
+  });
+  const card = cell.querySelector("[data-tile-card]")!;
+
+  // Nothing paints the card's own rectangle.
+  expect(getComputedStyle(card).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+  expect(getComputedStyle(card).boxShadow).toBe("none");
+
+  // The lift is cast by the photo's box, which is the photo's shape.
+  expect(getComputedStyle(photoBox).boxShadow).not.toBe("none");
+  expect(photoBox.getBoundingClientRect().height).toBeLessThan(cellRect.width - 10);
+});
+
+/**
+ * Text decoration does not cross into an atomic inline box, so backing the
+ * caption while it is carried is exactly the change that can silently un-strike
+ * the old name — the one line of a rename preview that says it is the old one.
+ */
+test("keeps the old name struck through while the tile is carried", async () => {
+  const screen = mount(entryFor("beach.png"), new ThumbnailCache(), {
+    previewName: "1.png",
+    dragging: true,
+  });
+
+  const old = screen.getByText("beach.png").element();
+  expect(getComputedStyle(old).textDecorationLine).toBe("line-through");
 });
 
 test("has no placeholder when it is not being dragged", async () => {
@@ -132,26 +201,32 @@ test("has no placeholder when it is not being dragged", async () => {
  * intrinsically, so a box sized off the image rather than off the square shows
  * up as a tile of the wrong size. Resolves once the photo has taken its shape.
  */
-async function selectedTile(name: string, bytes: Uint8Array) {
+async function selectedTile(name: string, bytes: Uint8Array, props: Record<string, unknown> = {}) {
   const screen = render(ImageTile, {
     props: {
       entry: entryOver(name, bytes, "image/png"),
       cache: new ThumbnailCache(),
       selected: true,
+      ...props,
     },
   });
   screen.container.style.width = "160px";
 
-  // Both shapes below are oblong, so a square box is one that has yet to decode.
+  // Every shape passed in below is oblong, so a square box is one that has yet
+  // to decode — which is the only reliable signal that the photo has reported
+  // its ratio and the boxes drawn from it are the real ones.
   const image = screen.getByRole("img", { name });
   const box = () => image.element().getBoundingClientRect();
   await expect.element(image).toBeVisible();
   await expect.poll(() => box().width !== box().height).toBe(true);
 
-  const cell = image.element().closest('[role="gridcell"]')!;
+  const cell = image.element().closest('[role="gridcell"]')! as HTMLElement;
   return {
+    screen,
+    cell,
+    photoBox: image.element().parentElement!,
     photo: box(),
-    cell: cell.getBoundingClientRect(),
+    cellRect: cell.getBoundingClientRect(),
     border: cell.querySelector("[data-selection]")!.getBoundingClientRect(),
   };
 }
@@ -182,6 +257,44 @@ test("draws the selection border around the photo and not the caption", async ()
 });
 
 /**
+ * The click target is the photograph, not the square it sits in. Everything else
+ * inside the cell is layout — and the grid reads a click that reaches it as a
+ * click on the background, which clears the selection. Getting this wrong is
+ * invisible until the letterboxing beside a wide photo stops deselecting.
+ */
+test("takes a selecting click on the photo and the caption, and nowhere else", async () => {
+  const screen = render(ImageTile, {
+    props: {
+      entry: entryOver("wide.png", await pngOf(400, 120), "image/png"),
+      cache: new ThumbnailCache(),
+      selected: false,
+    },
+  });
+  screen.container.style.width = "160px";
+
+  const image = screen.getByRole("img", { name: "wide.png" });
+  await expect.element(image).toBeVisible();
+  const photo = () => image.element().getBoundingClientRect();
+  await expect.poll(() => photo().width !== photo().height).toBe(true);
+
+  const cell = screen.getByRole("gridcell").element();
+  const square = cell.querySelector(".aspect-square")!.getBoundingClientRect();
+  const box = photo();
+
+  // The gutter above a wide photo belongs to no picture. A click there has to
+  // pass through to the grid, so it must not sit inside a select target.
+  const gutter = document.elementFromPoint(box.left + box.width / 2, square.top + 2)!;
+  expect(gutter.closest("[data-select-target]")).toBeNull();
+
+  const onPhoto = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)!;
+  expect(onPhoto.closest("[data-select-target]")).not.toBeNull();
+
+  const caption = screen.getByText("wide.png").element().getBoundingClientRect();
+  const onCaption = document.elementFromPoint(caption.left + 2, caption.top + caption.height / 2)!;
+  expect(onCaption.closest("[data-select-target]")).not.toBeNull();
+});
+
+/**
  * The square each photo is laid out in is invisible and load-bearing: it is what
  * lines a row of tiles up, and a photograph is almost never square. Sizing the
  * photo's box off the image is exactly how a tile comes to be the size of its
@@ -191,12 +304,12 @@ test("stays the size of its square whatever shape the photo is", async () => {
   const tall = await selectedTile("tall.png", await pngOf(200, 300));
   const wide = await selectedTile("wide.png", await pngOf(400, 120));
 
-  expect(tall.cell.height).toBeCloseTo(wide.cell.height, 0);
+  expect(tall.cellRect.height).toBeCloseTo(wide.cellRect.height, 0);
 
   // Neither photo is bigger than the square it is laid out in.
-  for (const { photo, cell } of [tall, wide]) {
-    expect(photo.width).toBeLessThanOrEqual(cell.width + 1);
-    expect(photo.height).toBeLessThanOrEqual(cell.width + 1);
+  for (const { photo, cellRect } of [tall, wide]) {
+    expect(photo.width).toBeLessThanOrEqual(cellRect.width + 1);
+    expect(photo.height).toBeLessThanOrEqual(cellRect.width + 1);
   }
 });
 

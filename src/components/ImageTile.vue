@@ -11,16 +11,21 @@ const props = defineProps<{
   entry: ImageEntry;
   cache: ThumbnailCache;
   selected: boolean;
+  /** The one selected tile the arrow keys move from, and so the one that takes focus. */
+  cursor?: boolean;
   /** Name the file will take if the current rename is applied. */
   previewName?: string;
   removing?: boolean;
   dragging?: boolean;
+  /** Selected, and coming along with a drag the cursor is carrying elsewhere. */
+  carried?: boolean;
+  /** How many photos the drag is carrying. Only the lifted card shows it, and only above one. */
+  carryCount?: number;
   draggable?: boolean;
   translate?: { x: number; y: number };
 }>();
 
 const emit = defineEmits<{
-  select: [];
   activate: [];
   dragStart: [event: PointerEvent];
 }>();
@@ -41,6 +46,16 @@ let requested: string | null = null;
 
 /** True only when this tile's name would actually change. */
 const renaming = computed(() => !!props.previewName && props.previewName !== props.entry.name);
+
+/**
+ * One caption line. Lifted, it takes a backing that hugs the text rather than
+ * filling the card — the card's width is the square this drag is avoiding — so
+ * it becomes `inline-block`, and stays inside a block `<p>` of its own to keep
+ * the rename's two lines stacked rather than sitting side by side.
+ */
+const captionLine = computed(() =>
+  props.dragging ? "inline-block max-w-full rounded-sm bg-background px-1" : "block",
+);
 
 /**
  * Known-undecodable formats are reported without even trying, so there is no
@@ -163,9 +178,10 @@ defineExpose({
   <div
     ref="root"
     role="gridcell"
+    :data-name="entry.name"
     :aria-hidden="removing || undefined"
     :aria-selected="selected && !removing"
-    :tabindex="selected && !removing ? 0 : -1"
+    :tabindex="cursor && !removing ? 0 : -1"
     :class="
       cn(
         'relative flex flex-col rounded-sm select-none',
@@ -173,25 +189,40 @@ defineExpose({
         'focus-visible:outline-none',
         dragging && 'z-20',
         removing && 'scale-90 opacity-0',
+        // Left behind in its cell while the cursor carries the rest of the
+        // block: dimmed, so it reads as travelling with the lifted card.
+        carried && 'opacity-40',
         draggable ? 'touch-none' : 'touch-manipulation',
       )
     "
     :style="dragging ? { transition: 'none' } : undefined"
     @pointerdown="emit('dragStart', $event)"
-    @click="emit('select')"
     @dblclick="emit('activate')"
   >
     <!--
       Where the tile will land when the button comes up. The tile itself stays
       in this cell — only the card below is offset — so an outline drawn on its
       own layer, costing no layout, is the whole of it.
+
+      It traces the photograph, not the cell: the square and the caption are
+      layout, and a dashed box round them promises the drop a shape it will not
+      have. The two spans below rebuild the same square-then-photo-box the card
+      does, because the card itself is away under the cursor. At `-inset-[5px]`
+      with a 3px stroke it lands on exactly the pixels the selection ring will
+      occupy once the photo is home.
     -->
     <span
       v-if="dragging"
-      data-drop-placeholder
       aria-hidden="true"
-      class="pointer-events-none absolute inset-0 rounded-sm border-2 border-dashed border-muted-foreground/40"
-    />
+      class="pointer-events-none absolute top-0 left-0 aspect-square w-full"
+    >
+      <span class="absolute inset-0 m-auto" :style="photoBox">
+        <span
+          data-drop-placeholder
+          class="absolute -inset-[5px] rounded-sm border-[3px] border-dashed border-muted-foreground/40"
+        />
+      </span>
+    </span>
 
     <!--
       The tile's contents. It has no surface of its own — the photo is the tile —
@@ -204,19 +235,15 @@ defineExpose({
       :class="
         cn(
           'relative flex flex-col rounded-sm',
-          'transition-[box-shadow] duration-(--motion-fast) ease-(--motion-ease)',
           // `flipTiles` animates this element — from the size the tile was, and
           // from the cell it was in — so it needs a corner to pivot on. The
           // cell itself never moves under it, which is what leaves it free to
           // be the drop placeholder.
           'origin-top-left',
-          // A lifted tile is the one time it needs a surface. Bare, it is
-          // transparent everywhere but the photo, so the tile it is dragged over
-          // shows through the caption — and it reads as a photo sliding around
-          // rather than as a tile being carried. `--background` rather than a
-          // lighter card colour: it is a piece of the grid picked up, and the
-          // shadow is what says it has been.
-          dragging && 'cursor-grabbing bg-background shadow-(--tile-shadow-lifted)',
+          // No surface of its own, even lifted: a card-shaped background is a
+          // square, and almost no photograph is. The shadow that says it has
+          // been picked up is drawn on the photo instead, to the photo's shape.
+          dragging && 'cursor-grabbing',
         )
       "
       :style="
@@ -226,14 +253,46 @@ defineExpose({
       "
     >
       <!--
+        A lifted card carrying more than itself. The other photos in the block
+        are still in their own cells behind the cursor, so without this the drag
+        looks like it is moving one file and then moves several.
+      -->
+      <span
+        v-if="dragging && carryCount && carryCount > 1"
+        aria-hidden="true"
+        class="absolute -top-1.5 -right-1.5 z-10 min-w-5 rounded-full bg-foreground px-1.5 py-0.5 text-center text-[10px] leading-none font-semibold text-background shadow-sm"
+      >
+        {{ carryCount }}
+      </span>
+
+      <!--
         The square every tile occupies whatever shape its photograph is, which is
         what keeps a row of them lined up. No `overflow-hidden`: the selection
         border is drawn outside the photo and would be clipped away by it.
       -->
       <div class="relative aspect-square w-full">
-        <!-- The photo's own box, letterboxing excluded; the square until the
-             image has decoded and reported its shape. -->
-        <div class="absolute inset-0 m-auto" :style="photoBox">
+        <!--
+          The photo's own box, letterboxing excluded; the square until the image
+          has decoded and reported its shape.
+
+          It is also the thing a click selects. The square around it is layout —
+          the letterboxing beside a wide photo belongs to no picture, and a click
+          there falls through to the grid and clears the selection instead.
+          `.stop`, so a click that *did* hit a photo never reaches that handler.
+        -->
+        <div
+          data-select-target
+          :class="
+            cn(
+              'absolute inset-0 m-auto',
+              'transition-[box-shadow] duration-(--motion-fast) ease-(--motion-ease)',
+              // The lift, cast by the picture itself. On the card it would be
+              // the shadow of a square the tile does not have.
+              dragging && 'shadow-(--tile-shadow-lifted)',
+            )
+          "
+          :style="photoBox"
+        >
           <!-- White, because on a wall of bare photographs against dark chrome it
                is the only thing that cannot be mistaken for part of an image.
 
@@ -273,7 +332,14 @@ defineExpose({
           watch. Shimmer rather than an empty frame, for the same reason the
           fallback below exists.
         -->
-        <div v-if="decoding" class="preview-shimmer absolute inset-0" aria-hidden="true" />
+        <!-- `pointer-events-none` on both of these: they cover the photo's own
+             box, which is the square until an image reports a shape, and that
+             box is what takes a selecting click. -->
+        <div
+          v-if="decoding"
+          class="preview-shimmer pointer-events-none absolute inset-0"
+          aria-hidden="true"
+        />
 
         <!--
           A frame with nothing in it reads as a broken app. Say which it is: a
@@ -281,7 +347,7 @@ defineExpose({
         -->
         <div
           v-if="noPreview"
-          class="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center"
+          class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center"
         >
           <ImageOff class="size-5 text-muted-foreground/50" aria-hidden="true" />
           <p class="text-[10px] leading-tight font-medium text-muted-foreground">No preview</p>
@@ -296,15 +362,23 @@ defineExpose({
         below it: side by side, the arrow and the struck-through original eat
         most of the width and truncate away the only part you are checking.
       -->
-      <div class="mt-1.5 min-w-0 text-center" :title="entry.name">
-        <p class="truncate text-[11px] leading-4" :class="renaming && 'font-medium'">
-          {{ previewName ?? entry.name }}
+      <div data-select-target class="mt-1.5 min-w-0 text-center" :title="entry.name">
+        <!--
+          Lifted, the name is carried over other people's photographs with
+          nothing behind it, so each line takes a backing of its own.
+        -->
+        <p class="text-[11px] leading-4" :class="renaming && 'font-medium'">
+          <span :class="cn('max-w-full truncate', captionLine)">{{
+            previewName ?? entry.name
+          }}</span>
         </p>
-        <p
-          v-if="renaming"
-          class="truncate text-[10px] leading-3.5 text-muted-foreground line-through"
-        >
-          {{ entry.name }}
+        <!--
+          `line-through` on the span, not the `<p>`: a decoration set on a block
+          does not reach into an atomic inline box, so lifting the line into an
+          `inline-block` backing would quietly un-strike the old name.
+        -->
+        <p v-if="renaming" class="text-[10px] leading-3.5 text-muted-foreground">
+          <span :class="cn('max-w-full truncate line-through', captionLine)">{{ entry.name }}</span>
         </p>
       </div>
     </div>

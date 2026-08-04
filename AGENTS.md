@@ -97,7 +97,7 @@ refreshed listing. Anything keeping a session alive across a disk change must do
 images or not — is what rename mode checks targets against, and a session outlives changes to the
 folder. Copying it into the session at `begin()` meant deleting a file left the bar refusing a name
 nothing held any more, with no way out but restarting. Any operation that changes folder contents
-must update `allNames`, the way `remove()` and `refresh()` do.
+must update `allNames`, the way `removeMany()` and `refresh()` do.
 
 ### Dates
 
@@ -182,6 +182,15 @@ only translates, and half of that one is the tiles changing size. Three things i
 - **The scroller is `overflow-x-hidden`.** A transform counts towards scrollable overflow, and cards
   mid-shrink are wider than the cells they are shrinking into.
 
+**A drag always carries a run, and one tile is a run of one.** There is no single-tile path beside
+the block path: `onBegin` says how many are coming and where the pressed tile sits inside them,
+`useTileDrag` owns the run from there — it does the one clamp (`startFor`), calls `onMove(start)` in
+run coordinates, and answers `carries(index)` for the tiles travelling beside the cursor. The grid
+only turns a start index into `gatherRun`. Two things follow. The first `onMove` is unconditional,
+because a selection with gaps in it needs collecting even when that leaves the run beginning exactly
+where the pressed tile already is. And keeping the run contiguous from then on is what lets `hitTest`
+go on answering with a single cell.
+
 **`Cmd`/`Ctrl` + `O` sits above the rest of the key map, deliberately.** `useKeyboard` returns early
 when there is no folder, so inside the `switch` the chord would work only once a folder was already
 open — the half that matters least. It also precedes `handlesItsOwnKeys`, since unlike the arrows it
@@ -192,7 +201,7 @@ means nothing in a text field. And nothing may be awaited before `openFolder()`:
 **Dialogs close themselves before your click handler runs.** Reka's `AlertDialogAction` dismisses the
 dialog as part of handling the click, so state cleared in the "dialog closed" path is already gone
 when the confirm handler looks for it, and the confirm silently does nothing. Both dialogs track
-_whether they are open_ separately from _what they are about_ (`deleteDialogOpen` / `pendingDelete`,
+_whether they are open_ separately from _what they are about_ (`deleteDialogOpen` / `pendingDeletes`,
 `guard.open` / `guard.pending`). Do not merge them back.
 
 **A tile's `<img>` is the photograph, not the square it sits in.** The square — `aspect-square` on the
@@ -204,8 +213,45 @@ on the `<img>` restores the square and breaks both — the border boxes in empty
 starts at the wrong width for every photo that is taller than it is wide. Nothing outside
 `ImageTile.browser.test.ts` fails when it does.
 
+**The photograph is also the only thing a click selects, and one handler decides that.** Every click
+in the grid reaches `GalleryGrid.onGridClick`, which asks one question: did it land inside a
+`data-select-target` — the photo box or the caption — or on background? Background is the
+letterboxing, the gaps, the padding and everything below the last row, and background clears the
+selection. Tiles do not handle their own clicks; they only mark which of their parts is the
+photograph, so adding a selectable region is one attribute and no second step. Two consequences worth
+keeping: widening the hit target back to the square removes the only place left to click to deselect,
+and overlays drawn over the photo box (the decode shimmer, the "No preview" fallback) must stay
+`pointer-events-none`, or they swallow the click for exactly the tiles that have no `<img>` to aim at.
+
+**A pointerup that ends a drag still fires a `click`**, retargeted by the pointer capture onto the
+cell — which is not a select target, so the grid would read it as background and clear the selection
+you just dragged. `useTileDrag` raises `justDropped()` for one turn of the event loop and the grid's
+click handler consults it. Scoped rather than swallowed globally: suppressing the click everywhere
+would eat it for the toolbar and any future drop target too.
+
+**The selection is a set, a cursor and an anchor, written only by `setSelection`.** The cursor is what
+every single-photo surface means by "selected" (large view, filmstrip, `getTileRect`); the anchor is
+where a `Shift` range starts and is held apart from the cursor, so each range is redrawn from the same
+place instead of extending from the last one. The invariant the single writer exists to keep: the
+cursor and the anchor are members of the set, or the set is empty and both are null. The cursor ships
+as `cursorName`, deliberately not a near-homonym of `selectedNames` — a surface that wants "the
+selected photo" and grabs the wrong one would silently act on one arbitrary member of a selection.
+
+**`gatherRun` moves a selection; nothing moves a single index.** It lifts entries out of the list
+wherever they are scattered and puts them back as one block, so the drag, the `Cmd`+arrow nudge and
+the initial gather are one operation with one set of edge cases. `useAperture.nudgeSelection` is where
+the keyboard's version lives — a key map should not be doing index arithmetic against layout maths.
+
+**Nothing a drag draws may be card-shaped.** The card is always a square and photographs are every
+shape, so a surface on the card is a dark rectangle around a picture that does not fill it. The lifted
+tile therefore has no background and no shadow of its own: the shadow is cast by the photo's box, the
+dashed drop placeholder rebuilds the same square-then-photo-box to trace the photograph, and each
+caption line takes an `inline-block` backing sized to the text. That last one carries a trap —
+text decoration does not cross into an atomic inline box, so `line-through` sits on the span rather
+than the `<p>`, or a lifted rename preview quietly stops striking out the old name.
+
 **A dragged tile never leaves its cell.** `ImageTile`'s root is the grid cell and stays put — it is
-the dashed drop placeholder — while a card _inside_ it carries the transform following the cursor,
+what hosts the drop placeholder — while a card _inside_ it carries the transform following the cursor,
 and `useTileDrag` measures the root for that offset. Moving the transform onto the root brings back
 the correction term the old code needed and leaves no cell to draw the placeholder in. The root also
 gets `transition: none` while dragging, or `TransitionGroup` FLIPs the placeholder over 260ms and the

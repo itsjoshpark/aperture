@@ -4,11 +4,10 @@ import type { Aperture } from "./useAperture";
 /**
  * The app's keyboard map, dispatched on the current view.
  *
- * One rule is worth stating outright because it is easy to "fix" by mistake:
- * **Escape never clears the selection.** In the grid it leaves rename mode and
- * otherwise does nothing; in large view it goes back to the grid. Losing your
- * place in a folder of two thousand photos because you pressed Escape would be
- * its own small tragedy.
+ * Escape unwinds one layer at a time and the selection is the last of them: out
+ * of the large view, then out of rename mode, and only with neither of those
+ * left does it clear what is selected. Skipping a layer would throw away a
+ * rename in progress on the way to deselecting a photo.
  */
 export function useKeyboard(aperture: Aperture) {
   useEventListener(window, "keydown", (event: KeyboardEvent) => {
@@ -34,15 +33,17 @@ export function useKeyboard(aperture: Aperture) {
 
     const inLargeView = aperture.gallery.view.value === "large";
     const reorderModifier = event.metaKey || event.ctrlKey;
+    // Extending a selection means nothing when only one photo is on screen.
+    const extend = event.shiftKey && !reorderModifier && !inLargeView;
 
     switch (event.key) {
       case "ArrowLeft":
       case "ArrowRight": {
         const direction = event.key === "ArrowLeft" ? "left" : "right";
         if (reorderModifier && !inLargeView) {
-          reorderSelected(aperture, direction === "left" ? -1 : 1);
+          aperture.nudgeSelection(direction === "left" ? -1 : 1);
         } else {
-          aperture.moveSelectionBy(direction);
+          aperture.moveSelectionBy(direction, extend);
         }
         break;
       }
@@ -51,22 +52,21 @@ export function useKeyboard(aperture: Aperture) {
       case "ArrowDown": {
         if (inLargeView) return; // vertical movement is meaningless on one image
         if (reorderModifier) {
-          reorderSelected(
-            aperture,
+          aperture.nudgeSelection(
             event.key === "ArrowUp" ? -aperture.columns.value : aperture.columns.value,
           );
         } else {
-          aperture.moveSelectionBy(event.key === "ArrowUp" ? "up" : "down");
+          aperture.moveSelectionBy(event.key === "ArrowUp" ? "up" : "down", extend);
         }
         break;
       }
 
       case "Home":
-        aperture.moveSelectionBy("home");
+        aperture.moveSelectionBy("home", extend);
         break;
 
       case "End":
-        aperture.moveSelectionBy("end");
+        aperture.moveSelectionBy("end", extend);
         break;
 
       case " ":
@@ -84,9 +84,9 @@ export function useKeyboard(aperture: Aperture) {
         break;
 
       case "Escape":
-        // Deliberately leaves the selection alone.
         if (inLargeView) aperture.closeLargeView();
-        else aperture.exitRename();
+        else if (aperture.rename.active.value) aperture.exitRename();
+        else aperture.gallery.clearSelection();
         break;
 
       default:
@@ -95,20 +95,6 @@ export function useKeyboard(aperture: Aperture) {
 
     event.preventDefault();
   });
-}
-
-/**
- * Keyboard reordering, so arranging images is not mouse-only. Entering rename
- * mode on the first press mirrors what dragging does.
- */
-function reorderSelected(aperture: Aperture, delta: number): void {
-  if (!aperture.rename.active.value) aperture.enterRename();
-
-  const from = aperture.selectedIndex.value;
-  if (from < 0) return;
-
-  const to = Math.min(Math.max(from + delta, 0), aperture.displayed.value.length - 1);
-  if (to !== from) aperture.rename.move(from, to);
 }
 
 /**

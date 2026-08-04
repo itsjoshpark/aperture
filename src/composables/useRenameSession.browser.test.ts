@@ -40,7 +40,7 @@ test("forgets a file deleted while the session is open", async () => {
   ]);
 
   // Exactly what `confirmDelete` does once the tile has animated out.
-  await gallery.remove("Photo 02.heic", rename.draft.value);
+  await gallery.removeMany(["Photo 02.heic"], rename.draft.value);
   rename.forget("Photo 02.heic");
 
   // Two files left, so the second one is headed for the name the deleted file

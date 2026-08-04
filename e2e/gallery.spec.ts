@@ -24,6 +24,30 @@ async function openGallery(
 
 const tile = (page: Page, name: string) => page.getByRole("gridcell").filter({ hasText: name });
 const selected = (page: Page) => page.locator('[role="gridcell"][aria-selected="true"]');
+
+/**
+ * Only the photograph takes a selecting click — the square around it is layout,
+ * and clicking there clears the selection instead. So these go for the `<img>`
+ * rather than the cell, whose centre is not inside every photo's box.
+ */
+const clickTile = (page: Page, name: string, modifiers?: ("Meta" | "Shift")[]) =>
+  tile(page, name)
+    .locator("img")
+    .click(modifiers ? { modifiers } : undefined);
+
+/**
+ * Drag one tile onto another's cell. Two moves, not one: the first has to cross
+ * `DRAG_THRESHOLD` before the press counts as a drag at all, and only the second
+ * lands it — so a single `move()` reorders nothing and reads as a broken grid.
+ */
+async function dragTile(page: Page, from: string, to: string): Promise<void> {
+  await tile(page, from).hover();
+  await page.mouse.down();
+  const box = (await tile(page, to).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
+  await page.mouse.move(box.x + 4, box.y + 4, { steps: 4 });
+  await page.mouse.up();
+}
 /**
  * What actually landed "on disk". The specs typecheck under the Node config,
  * which has no DOM lib, so the harness hooks are described here rather than
@@ -91,6 +115,11 @@ test("reverses the order on descending", async ({ page }) => {
 test.describe("keyboard", () => {
   test("moves the selection with the arrow keys", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
+    // A folder opens with nothing selected; the first arrow press picks it up
+    // at the first photo rather than moving from one.
+    await expect(selected(page)).toHaveCount(0);
+
+    await page.keyboard.press("ArrowRight");
     await expect(selected(page)).toHaveText(/a\.jpg/);
 
     await page.keyboard.press("ArrowRight");
@@ -116,6 +145,7 @@ test.describe("keyboard", () => {
   test("opens and closes the large view with Space and Escape", async ({ page }) => {
     await openGallery(page);
 
+    await page.keyboard.press("Home");
     await page.keyboard.press(" ");
     await expect(page.getByRole("listbox", { name: "Images in this folder" })).toBeVisible();
 
@@ -123,22 +153,21 @@ test.describe("keyboard", () => {
     await expect(page.getByRole("listbox", { name: "Images in this folder" })).toBeHidden();
   });
 
-  test("Escape never clears the selection", async ({ page }) => {
+  /** Escape unwinds one layer at a time, and the selection is the last of them. */
+  test("Escape leaves the large view before it clears the selection", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
-    await page.keyboard.press("ArrowRight");
-    await expect(selected(page)).toHaveText(/b\.jpg/);
-
-    // Once from the grid, and once on the way back out of the large view.
-    await page.keyboard.press("Escape");
+    await clickTile(page, "b.jpg");
     await expect(selected(page)).toHaveText(/b\.jpg/);
 
     await page.keyboard.press(" ");
     await page.keyboard.press("Escape");
+    // Out of the large view, with the photo you were looking at still selected.
+    await expect(page.getByRole("listbox", { name: "Images in this folder" })).toBeHidden();
     await expect(selected(page)).toHaveText(/b\.jpg/);
 
     await page.keyboard.press("Escape");
-    await expect(selected(page)).toHaveText(/b\.jpg/);
+    await expect(selected(page)).toHaveCount(0);
   });
 
   test("opens a folder with Cmd/Ctrl+O before there is one", async ({ page }) => {
@@ -155,6 +184,7 @@ test.describe("keyboard", () => {
 
     // A dirty rename session is what makes the second open observable: it is
     // the guard, not a fresh grid, that proves the shortcut got there.
+    await page.keyboard.press("Home");
     await page.keyboard.press("ControlOrMeta+ArrowRight");
     await page.keyboard.press("ControlOrMeta+o");
 
@@ -164,11 +194,78 @@ test.describe("keyboard", () => {
   test("keeps the selection on the same photo through a re-sort", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
-    await page.keyboard.press("ArrowRight");
+    await clickTile(page, "b.jpg");
     await page.getByRole("button", { name: /Name/ }).click();
     await page.getByRole("menuitem", { name: "Descending" }).click();
 
     await expect(selected(page)).toHaveText(/b\.jpg/);
+  });
+
+  test("extends the selection with Shift and the arrow keys", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+
+    await clickTile(page, "b.jpg");
+    await page.keyboard.press("Shift+ArrowRight");
+    await page.keyboard.press("Shift+ArrowRight");
+    await expect(selected(page)).toHaveText([/b\.jpg/, /c\.jpg/, /d\.jpg/]);
+
+    // Every range is drawn from the anchor, so walking back shortens it.
+    await page.keyboard.press("Shift+ArrowLeft");
+    await expect(selected(page)).toHaveText([/b\.jpg/, /c\.jpg/]);
+
+    // An arrow without Shift collapses back to one photo.
+    await page.keyboard.press("ArrowRight");
+    await expect(selected(page)).toHaveText([/d\.jpg/]);
+  });
+});
+
+test.describe("multiple selection", () => {
+  test("adds a photo with Cmd and a range with Shift", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+
+    await clickTile(page, "a.jpg");
+    await clickTile(page, "c.jpg", ["Meta"]);
+    await expect(selected(page)).toHaveText([/a\.jpg/, /c\.jpg/]);
+
+    // Cmd again takes it back out.
+    await clickTile(page, "c.jpg", ["Meta"]);
+    await expect(selected(page)).toHaveText([/a\.jpg/]);
+
+    await clickTile(page, "d.jpg", ["Shift"]);
+    await expect(selected(page)).toHaveText([/a\.jpg/, /b\.jpg/, /c\.jpg/, /d\.jpg/]);
+
+    // And a plain click is still a plain click.
+    await clickTile(page, "b.jpg");
+    await expect(selected(page)).toHaveText([/b\.jpg/]);
+  });
+
+  /**
+   * The photograph is the only part of a tile that selects. Everything else in
+   * the grid — the gaps, the padding, the letterboxing beside a photo that is
+   * not square — is background, and clicking background deselects.
+   */
+  test("clears the selection by clicking the background", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
+
+    await clickTile(page, "b.jpg");
+    await expect(selected(page)).toHaveCount(1);
+
+    // The padding below the last row, which belongs to no tile.
+    const scroller = page.locator("div.overflow-y-auto").first();
+    const bounds = (await scroller.boundingBox())!;
+    await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height - 4);
+
+    await expect(selected(page)).toHaveCount(0);
+  });
+
+  test("keeps selecting from the caption, which is part of the photo's record", async ({
+    page,
+  }) => {
+    await openGallery(page, ["a.jpg", "b.jpg"]);
+
+    await tile(page, "b.jpg").getByText("b.jpg").click();
+
+    await expect(selected(page)).toHaveText([/b\.jpg/]);
   });
 });
 
@@ -176,6 +273,7 @@ test.describe("delete", () => {
   test("warns that deleting is permanent, then deletes", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
+    await clickTile(page, "a.jpg");
     await page.keyboard.press("Delete");
     await expect(page.getByRole("alertdialog")).toContainText("not moved to the Trash");
 
@@ -188,7 +286,7 @@ test.describe("delete", () => {
   test("deletes the selection from the toolbar button", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
-    await page.getByRole("gridcell").filter({ hasText: "b.jpg" }).click();
+    await clickTile(page, "b.jpg");
     // Exact: the dialog's own action is "Delete permanently".
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     await page.getByRole("button", { name: "Delete permanently" }).click();
@@ -200,6 +298,7 @@ test.describe("delete", () => {
   test("leaves the file alone when cancelled", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg"]);
 
+    await clickTile(page, "a.jpg");
     await page.keyboard.press("Delete");
     await page.getByRole("button", { name: "Cancel" }).click();
 
@@ -210,6 +309,7 @@ test.describe("delete", () => {
   test("returns to the grid when the last image goes", async ({ page }) => {
     await openGallery(page, ["only.jpg"]);
 
+    await clickTile(page, "only.jpg");
     await page.keyboard.press(" ");
     await expect(page.getByRole("listbox", { name: "Images in this folder" })).toBeVisible();
 
@@ -223,10 +323,29 @@ test.describe("delete", () => {
   test("moves the selection to the next image", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
+    await clickTile(page, "a.jpg");
     await page.keyboard.press("Delete");
     await page.getByRole("button", { name: "Delete permanently" }).click();
 
     await expect(selected(page)).toHaveText(/b\.jpg/);
+  });
+
+  test("deletes a whole selection at once and lands after it", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+
+    await clickTile(page, "a.jpg");
+    await clickTile(page, "b.jpg", ["Shift"]);
+
+    await page.keyboard.press("Delete");
+    // Counted, not named: there is no one file name to put in the question.
+    await expect(page.getByRole("alertdialog")).toContainText("Delete 2 images?");
+    await expect(page.getByRole("alertdialog")).toContainText("not moved to the Trash");
+
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+
+    await expect(page.getByRole("gridcell")).toHaveCount(2);
+    expect(await diskNames(page)).toEqual(["c.jpg", "d.jpg"]);
+    await expect(selected(page)).toHaveText([/c\.jpg/]);
   });
 });
 
@@ -313,6 +432,7 @@ test.describe("preview size", () => {
     page,
   }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
+    await clickTile(page, "a.jpg");
     await expect(selected(page)).toHaveText(/a\.jpg/);
 
     const before = await sizeSlider(page).getAttribute("aria-valuenow");
@@ -370,13 +490,7 @@ test.describe("rename", () => {
       return seen;
     });
 
-    const source = tile(page, "d.jpg");
-    const target = tile(page, "a.jpg");
-    await source.hover();
-    await page.mouse.down();
-    const box = (await target.boundingBox())!;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 6 });
-    await page.mouse.up();
+    await dragTile(page, "d.jpg", "a.jpg");
 
     expect(await watching).toEqual({ displaced: true, lifted: false });
     await expect(page.getByRole("gridcell")).toHaveText([/d\.jpg/, /a\.jpg/, /b\.jpg/, /c\.jpg/]);
@@ -386,17 +500,12 @@ test.describe("rename", () => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
     // Drag the last tile onto the first cell.
-    const source = tile(page, "c.jpg");
-    const target = tile(page, "a.jpg");
-    await source.hover();
+    // Held mid-drag, so the cell the tile would land in is outlined.
+    await tile(page, "c.jpg").hover();
     await page.mouse.down();
-    const box = (await target.boundingBox())!;
-    // Two moves: the first crosses the drag threshold, the second lands.
+    const box = (await tile(page, "a.jpg").boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
-
-    // Mid-drag, the cell the tile would land in is outlined.
     await expect(page.locator("[data-drop-placeholder]")).toBeVisible();
-
     await page.mouse.move(box.x + 4, box.y + 4, { steps: 4 });
     await page.mouse.up();
 
@@ -431,6 +540,51 @@ test.describe("rename", () => {
 
     // Undoing returns to the ordinary gallery, sorting restored.
     await expect(page.getByRole("button", { name: /Name/ })).toBeVisible();
+  });
+
+  /**
+   * A selection of several travels as one block. It is gathered around the tile
+   * under the cursor when the drag begins — so the run is contiguous from then
+   * on, and what the grid shows mid-drag is what the drop will produce.
+   */
+  test("carries a whole selection to where the drag lands", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+
+    // Two photos with another between them, so gathering them is visible.
+    await clickTile(page, "b.jpg");
+    await clickTile(page, "d.jpg", ["Meta"]);
+
+    // Held mid-drag, because the lifted card says how many it is carrying.
+    await tile(page, "d.jpg").hover();
+    await page.mouse.down();
+    const box = (await tile(page, "a.jpg").boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
+    await expect(page.locator("[data-tile-card][data-dragging]")).toContainText("2");
+    await page.mouse.move(box.x + 4, box.y + 4, { steps: 4 });
+    await page.mouse.up();
+
+    await expect(page.getByRole("gridcell")).toHaveText([/b\.jpg/, /d\.jpg/, /a\.jpg/, /c\.jpg/]);
+    // The drag was not a click on the background, whatever the click that
+    // follows a pointerup is retargeted onto.
+    await expect(selected(page)).toHaveText([/b\.jpg/, /d\.jpg/]);
+
+    await page.getByLabel("Prefix").fill("trip-");
+    await page.getByRole("button", { name: /^Rename \d+ files?$/ }).click();
+
+    await expect
+      .poll(() => diskNames(page).then((names) => names.slice().sort()))
+      .toEqual(["trip-1.jpg", "trip-2.jpg", "trip-3.jpg", "trip-4.jpg"]);
+  });
+
+  test("drags a photo outside the selection on its own", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
+
+    await clickTile(page, "a.jpg");
+
+    await dragTile(page, "c.jpg", "a.jpg");
+
+    await expect(page.getByRole("gridcell")).toHaveText([/c\.jpg/, /a\.jpg/, /b\.jpg/]);
+    await expect(selected(page)).toHaveText([/c\.jpg/]);
   });
 
   /**
@@ -486,6 +640,7 @@ test.describe("rename", () => {
   test("reorders from the keyboard as well as the mouse", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
+    await page.keyboard.press("Home");
     await page.keyboard.press("ControlOrMeta+ArrowRight");
 
     await expect(page.getByRole("button", { name: "Custom order" })).toBeVisible();
@@ -577,6 +732,7 @@ test("actually renders the images", async ({ page }) => {
 
 test("renders the image in the large view and the filmstrip", async ({ page }) => {
   await openGallery(page, ["a.jpg", "b.jpg"]);
+  await page.keyboard.press("Home");
   await page.keyboard.press(" ");
 
   const main = page.locator("[data-large-image]");
@@ -606,7 +762,10 @@ test("says there is no preview for a format nothing can decode", async ({ page }
   // The decodable neighbour is unaffected.
   await expect(tile(page, "b.jpg").locator("img")).toHaveCount(1);
 
+  // A tile with nothing to draw still selects: the fallback covers the photo's
+  // own box, which is the whole square while no image has reported a shape.
   await undecodable.click();
+  await expect(selected(page)).toHaveText([/scan\.tiff/]);
   await page.keyboard.press(" ");
   await expect(page.getByText("No preview available")).toBeVisible();
   await expect(page.getByText(/can draw TIFF/)).toBeVisible();

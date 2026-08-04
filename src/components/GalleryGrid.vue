@@ -4,6 +4,7 @@ import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import { useAperture } from "@/composables/useAperture";
 import { useTileDrag } from "@/composables/useTileDrag";
 import { MAX_TILE_SIZE, MIN_TILE_SIZE } from "@/composables/useGallery";
+import type { ImageEntry } from "@/lib/fs/types";
 import { cellWidthFor, columnCount, type GridMetrics, tileSizeStops } from "@/lib/grid-geometry";
 import { captureTiles, flipTiles, TILE_FLIP_DURATION } from "@/lib/tile-flip";
 import ImageTile from "./ImageTile.vue";
@@ -70,6 +71,12 @@ const metrics = (): GridMetrics => {
   };
 };
 
+/**
+ * The photos a drag is carrying, in the order they will land. One tile is a run
+ * of one, so nothing below has a single-tile case beside the block case.
+ */
+const carried = shallowRef<ImageEntry[]>([]);
+
 const drag = useTileDrag({
   scroller: () => scroller.value,
   contentHeight: () => grid.value?.offsetHeight ?? 0,
@@ -82,13 +89,22 @@ const drag = useTileDrag({
   onBegin: async (index) => {
     // Dragging a tile *is* how you enter rename mode.
     if (!rename.active.value) aperture.enterRename();
-    const entry = aperture.displayed.value[index];
-    if (entry) gallery.select(entry.name);
+
+    const pressed = aperture.displayed.value[index];
+    if (!pressed) return;
+
+    // Pressing a photo outside the selection drags that photo alone, the way
+    // Finder does — the selection you had was about something else.
+    if (!gallery.selectedNames.value.has(pressed.name)) gallery.select(pressed.name);
+    carried.value = aperture.selectedEntries.value;
+
     await nextTick();
+    return { size: carried.value.length, offset: carried.value.indexOf(pressed) };
   },
-  // The tiles the dragged one displaces slide out of its way; the dragged card
-  // itself is under the cursor and is left alone.
-  onMove: (from, to) => void flipThrough(() => rename.move(from, to)),
+  // The tiles the run displaces slide out of its way; the lifted card itself is
+  // under the cursor and is left alone. The first call gathers a scattered
+  // selection into one block, which is why they visibly close up.
+  onMove: (start) => void flipThrough(() => rename.moveRun(carried.value, start)),
   onCancel: () => rename.cancel(),
 });
 
@@ -96,7 +112,9 @@ const drag = useTileDrag({
 // cell is. This watcher runs before the release reaches the DOM, so the card is
 // still lifted when it is measured and settled by the time it is animated.
 watch(drag.dragging, (lifted) => {
-  if (!lifted) void flipThrough();
+  if (lifted) return;
+  carried.value = [];
+  void flipThrough();
 });
 
 /**
@@ -130,6 +148,35 @@ function registerTile(name: string, instance: unknown): void {
   else tiles.delete(name);
 }
 
+/**
+ * Every click in the grid arrives here, and one rule sorts them: it either
+ * landed on something that marks itself selectable — a photograph or its
+ * caption — or it landed on background, which is the gaps, the padding, the
+ * letterboxing beside a tall photo, and everything below the last row.
+ *
+ * Delegated rather than handled per tile so there is one place that knows the
+ * rule; the tiles only have to declare which of their parts is the photograph.
+ */
+function onGridClick(event: MouseEvent): void {
+  // The pointerup that ends a drag fires a click too, retargeted by the pointer
+  // capture onto the cell — which is not a select target, and would clear the
+  // selection you just dragged.
+  if (drag.justDropped()) return;
+
+  const target = (event.target as HTMLElement | null)?.closest("[data-select-target]");
+  const name = target?.closest<HTMLElement>("[data-name]")?.dataset.name;
+  if (name === undefined) {
+    gallery.clearSelection();
+    return;
+  }
+
+  // The standard three: plain click replaces, `Cmd`/`Ctrl` toggles, `Shift` ranges.
+  const list = aperture.displayed.value;
+  if (event.metaKey || event.ctrlKey) gallery.toggle(name, list);
+  else if (event.shiftKey) gallery.extendTo(name, list);
+  else gallery.select(name);
+}
+
 /** Where a tile is on screen, for the large view's open/close animation. */
 function getTileRect(name: string): DOMRect | null {
   const image = tiles.get(name)?.el?.querySelector("img");
@@ -138,7 +185,7 @@ function getTileRect(name: string): DOMRect | null {
 
 // Keep the selection on screen as it moves, whether by arrow key or by sort.
 watch(
-  () => gallery.selectedName.value,
+  () => gallery.cursorName.value,
   async (name) => {
     if (!name || drag.dragging.value) return;
     await nextTick();
@@ -156,12 +203,17 @@ defineExpose({ scroller, getTileRect });
     shrinking into, and a horizontal scrollbar that appears for 260ms and then
     leaves takes the whole grid with it, twice.
   -->
-  <div ref="scroller" class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+  <div
+    ref="scroller"
+    class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
+    @click="onGridClick"
+  >
     <TransitionGroup
       ref="gridRoot"
       tag="div"
       name="tile"
       role="grid"
+      aria-multiselectable="true"
       :aria-label="`${gallery.label.value} — ${aperture.displayed.value.length} images`"
       class="grid gap-4 p-4"
       :style="gridStyle"
@@ -172,13 +224,15 @@ defineExpose({ scroller, getTileRect });
         :ref="(instance) => registerTile(entry.name, instance)"
         :entry="entry"
         :cache="gallery.thumbnails"
-        :selected="entry.name === gallery.selectedName.value"
+        :selected="gallery.selectedNames.value.has(entry.name)"
+        :cursor="entry.name === gallery.cursorName.value"
         :preview-name="previewNames?.get(entry.name)"
-        :removing="entry.name === gallery.removingName.value"
+        :removing="gallery.removingNames.value.has(entry.name)"
         :dragging="index === drag.draggingIndex.value && drag.dragging.value"
+        :carried="drag.carries(index)"
+        :carry-count="carried.length"
         :translate="drag.translate.value"
         :draggable="rename.active.value"
-        @select="gallery.select(entry.name)"
         @activate="aperture.openLargeView()"
         @drag-start="drag.onPointerDown($event, index)"
       />
