@@ -37,10 +37,20 @@ export interface TileDragOptions {
   metrics: () => GridMetrics;
   /** Grid content-box origin, in viewport coordinates. */
   gridOrigin: () => { x: number; y: number };
-  /** Called once when a press turns into a drag. Enters rename mode. */
-  onBegin: (index: number) => void | Promise<void>;
-  /** Called whenever the dragged tile should change position. */
-  onMove: (from: number, to: number) => void;
+  /**
+   * Called once when a press turns into a drag. Enters rename mode.
+   *
+   * May return a corrected index: dragging a multi-tile selection gathers it
+   * into a contiguous block first, which moves the pressed tile out from under
+   * the index it was pressed at.
+   */
+  onBegin: (index: number) => number | void | Promise<number | void>;
+  /**
+   * Called whenever the dragged tile should change position. Returns the index
+   * the tile actually took, which is not the one asked for when a block of
+   * several has been clamped against the end of the list.
+   */
+  onMove: (from: number, to: number) => number | void;
   onEnd?: () => void;
   /** Called if the drag is abandoned with Escape. */
   onCancel?: () => void;
@@ -102,7 +112,8 @@ export function useTileDrag(options: TileDragOptions) {
       // Capture so the drag survives the pointer leaving the tile — which it
       // does immediately, because the tile moves out from under it.
       element.value?.setPointerCapture(pointerId);
-      await options.onBegin(draggingIndex.value);
+      const corrected = await options.onBegin(draggingIndex.value);
+      if (typeof corrected === "number") draggingIndex.value = corrected;
       schedule();
       return;
     }
@@ -137,8 +148,8 @@ export function useTileDrag(options: TileDragOptions) {
     );
 
     if (target >= 0 && target !== draggingIndex.value) {
-      options.onMove(draggingIndex.value, target);
-      draggingIndex.value = target;
+      const landed = options.onMove(draggingIndex.value, target);
+      draggingIndex.value = typeof landed === "number" ? landed : target;
       // The tile only reaches its new cell when Vue flushes, which is after this
       // frame has computed the offset. Re-measure on the far side of that flush,
       // still before the paint, or the card is drawn a cell out of place for the
@@ -203,7 +214,29 @@ export function useTileDrag(options: TileDragOptions) {
     stop();
   }
 
+  /**
+   * A pointerup that ends a drag still dispatches a `click`, retargeted by the
+   * pointer capture onto the cell — which the grid would read as a click that
+   * missed every photo, and clear the selection you just dragged. Swallow
+   * exactly one, and only after a press that really became a drag.
+   */
+  function swallowNextClick(): void {
+    const listener = (event: MouseEvent) => {
+      event.stopPropagation();
+      disarm();
+    };
+    const disarm = () => {
+      clearTimeout(timer);
+      window.removeEventListener("click", listener, true);
+    };
+    // No click arrives at all if the pointer came up outside the window.
+    const timer = setTimeout(disarm, 0);
+    window.addEventListener("click", listener, true);
+  }
+
   function stop(): void {
+    if (dragging.value) swallowNextClick();
+
     if (frame !== 0) {
       cancelAnimationFrame(frame);
       frame = 0;

@@ -5,6 +5,7 @@ import {
   hitTest,
   indexToCell,
   moveSelection,
+  gatherRun,
   reorder,
   stopIndexFor,
   tileSizeStops,
@@ -243,5 +244,44 @@ describe("reorder", () => {
 
   it("clamps a target past the end", () => {
     expect(reorder(["a", "b", "c"], 0, 99)).toEqual(["b", "c", "a"]);
+  });
+});
+
+describe("gatherRun", () => {
+  it("moves a contiguous run later", () => {
+    expect(gatherRun(["a", "b", "c", "d", "e"], ["b", "c"], 2)).toEqual(["a", "d", "b", "c", "e"]);
+  });
+
+  it("moves a contiguous run earlier", () => {
+    expect(gatherRun(["a", "b", "c", "d"], ["c", "d"], 0)).toEqual(["c", "d", "a", "b"]);
+  });
+
+  it("collects a scattered selection into one block", () => {
+    expect(gatherRun(["a", "b", "c", "d", "e"], ["a", "c", "e"], 1)).toEqual([
+      "b",
+      "a",
+      "c",
+      "e",
+      "d",
+    ]);
+  });
+
+  it("keeps the run's own order rather than the list's", () => {
+    expect(gatherRun(["a", "b", "c"], ["c", "a"], 0)).toEqual(["c", "a", "b"]);
+  });
+
+  it("clamps a target past the end of the shortened list", () => {
+    expect(gatherRun(["a", "b", "c", "d"], ["a", "b"], 99)).toEqual(["c", "d", "a", "b"]);
+  });
+
+  it("behaves like reorder for a run of one", () => {
+    expect(gatherRun(["a", "b", "c", "d"], ["a"], 2)).toEqual(reorder(["a", "b", "c", "d"], 0, 2));
+  });
+
+  it("does not mutate the input", () => {
+    const items = ["a", "b", "c"];
+    gatherRun(items, ["a"], 2);
+
+    expect(items).toEqual(["a", "b", "c"]);
   });
 });

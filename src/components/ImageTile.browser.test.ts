@@ -118,6 +118,32 @@ test("leaves a placeholder in the cell and offsets the card", async () => {
   expect(lifted.top - cellNow.top).toBeCloseTo(translate.y, 0);
 });
 
+/**
+ * The dashed outline and the selection band are the same idea drawn twice — this
+ * is where the tile will be, this is the tile you have — so a difference in
+ * weight between them reads as an accident.
+ */
+test("draws the drop placeholder at the weight of the selection border", async () => {
+  const props = {
+    entry: entryFor(),
+    cache: new ThumbnailCache(),
+    selected: true,
+    dragging: true,
+    translate: { x: 0, y: 0 },
+  };
+  const screen = render(ImageTile, { props });
+  await expect.element(screen.getByRole("img")).toBeVisible();
+
+  const cell = screen.getByRole("gridcell").element();
+  const placeholder = cell.querySelector("[data-drop-placeholder]")!;
+  expect(getComputedStyle(placeholder).borderTopWidth).toBe("3px");
+
+  // The band the selection draws is the inner box's inset from the outer one.
+  const outer = cell.querySelector("[data-selection]")!.getBoundingClientRect();
+  const inner = cell.querySelector("[data-selection] > span")!.getBoundingClientRect();
+  expect(inner.left - outer.left).toBeCloseTo(3, 0);
+});
+
 test("has no placeholder when it is not being dragged", async () => {
   const screen = mount();
   await expect.element(screen.getByRole("img")).toBeVisible();
@@ -179,6 +205,59 @@ test("draws the selection border around the photo and not the caption", async ()
   expect(wide.top).toBeCloseTo(photo.top - 5, 0);
   expect(wide.right).toBeCloseTo(photo.right + 5, 0);
   expect(wide.bottom).toBeCloseTo(photo.bottom + 5, 0);
+});
+
+/**
+ * The click target is the photograph, not the square it sits in. Everything else
+ * inside the cell is layout — and the grid reads a click that reaches it as a
+ * click on the background, which clears the selection. Getting this wrong is
+ * invisible until the letterboxing beside a wide photo stops deselecting.
+ */
+test("takes a selecting click on the photo and the caption, and nowhere else", async () => {
+  const screen = render(ImageTile, {
+    props: {
+      entry: entryOver("wide.png", await pngOf(400, 120), "image/png"),
+      cache: new ThumbnailCache(),
+      selected: false,
+    },
+  });
+  screen.container.style.width = "160px";
+
+  const image = screen.getByRole("img", { name: "wide.png" });
+  await expect.element(image).toBeVisible();
+  const photo = () => image.element().getBoundingClientRect();
+  await expect.poll(() => photo().width !== photo().height).toBe(true);
+
+  const cell = screen.getByRole("gridcell").element();
+  const square = cell.querySelector(".aspect-square")!.getBoundingClientRect();
+  const box = photo();
+
+  // The gutter above a wide photo belongs to no picture. A click there has to
+  // pass through to the grid, so it must not sit inside a select target.
+  const gutter = document.elementFromPoint(box.left + box.width / 2, square.top + 2)!;
+  expect(gutter.closest("[data-select-target]")).toBeNull();
+
+  const onPhoto = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)!;
+  expect(onPhoto.closest("[data-select-target]")).not.toBeNull();
+
+  const caption = screen.getByText("wide.png").element().getBoundingClientRect();
+  const onCaption = document.elementFromPoint(caption.left + 2, caption.top + caption.height / 2)!;
+  expect(onCaption.closest("[data-select-target]")).not.toBeNull();
+});
+
+test("emits select with the click, so the grid can read its modifiers", async () => {
+  const screen = render(ImageTile, {
+    props: { entry: entryFor("beach.png"), cache: new ThumbnailCache(), selected: false },
+  });
+  await expect.element(screen.getByRole("img")).toBeVisible();
+
+  screen
+    .getByText("beach.png")
+    .element()
+    .dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true }));
+
+  const [emitted] = screen.emitted("select") as [MouseEvent][];
+  expect(emitted![0].metaKey).toBe(true);
 });
 
 /**

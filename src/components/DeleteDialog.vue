@@ -14,6 +14,13 @@ import { useAperture } from "@/composables/useAperture";
 
 const aperture = useAperture();
 
+const count = computed(() => aperture.pendingDeletes.value.length);
+const title = computed(() =>
+  count.value === 1
+    ? `Delete ${aperture.pendingDeletes.value[0]?.name}?`
+    : `Delete ${count.value} images?`,
+);
+
 const open = computed({
   get: () => aperture.deleteDialogOpen.value,
   set: (next: boolean) => {
@@ -26,15 +33,19 @@ const open = computed({
   <AlertDialog v-model:open="open">
     <AlertDialogContent>
       <AlertDialogHeader>
-        <AlertDialogTitle>Delete {{ aperture.pendingDelete.value?.name }}?</AlertDialogTitle>
+        <AlertDialogTitle>{{ title }}</AlertDialogTitle>
         <!--
           The File System Access API has no route to the Trash — removeEntry is
           a permanent delete. Saying "move to Trash" would be a lie people only
           discover when they go looking for the file.
         -->
-        <AlertDialogDescription>
+        <AlertDialogDescription v-if="count === 1">
           This permanently deletes the file from your disk. It is not moved to the Trash and cannot
           be undone.
+        </AlertDialogDescription>
+        <AlertDialogDescription v-else>
+          This permanently deletes these files from your disk. They are not moved to the Trash and
+          cannot be undone.
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>

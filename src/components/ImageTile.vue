@@ -11,16 +11,22 @@ const props = defineProps<{
   entry: ImageEntry;
   cache: ThumbnailCache;
   selected: boolean;
+  /** The one selected tile the arrow keys move from, and so the one that takes focus. */
+  cursor?: boolean;
   /** Name the file will take if the current rename is applied. */
   previewName?: string;
   removing?: boolean;
   dragging?: boolean;
+  /** Selected, and coming along with a drag the cursor is carrying elsewhere. */
+  carried?: boolean;
+  /** How many photos the lifted card is carrying; only set on a multi-tile drag. */
+  carryCount?: number;
   draggable?: boolean;
   translate?: { x: number; y: number };
 }>();
 
 const emit = defineEmits<{
-  select: [];
+  select: [event: MouseEvent];
   activate: [];
   dragStart: [event: PointerEvent];
 }>();
@@ -165,7 +171,7 @@ defineExpose({
     role="gridcell"
     :aria-hidden="removing || undefined"
     :aria-selected="selected && !removing"
-    :tabindex="selected && !removing ? 0 : -1"
+    :tabindex="cursor && !removing ? 0 : -1"
     :class="
       cn(
         'relative flex flex-col rounded-sm select-none',
@@ -173,12 +179,14 @@ defineExpose({
         'focus-visible:outline-none',
         dragging && 'z-20',
         removing && 'scale-90 opacity-0',
+        // Left behind in its cell while the cursor carries the rest of the
+        // block: dimmed, so it reads as travelling with the lifted card.
+        carried && 'opacity-40',
         draggable ? 'touch-none' : 'touch-manipulation',
       )
     "
     :style="dragging ? { transition: 'none' } : undefined"
     @pointerdown="emit('dragStart', $event)"
-    @click="emit('select')"
     @dblclick="emit('activate')"
   >
     <!--
@@ -190,7 +198,7 @@ defineExpose({
       v-if="dragging"
       data-drop-placeholder
       aria-hidden="true"
-      class="pointer-events-none absolute inset-0 rounded-sm border-2 border-dashed border-muted-foreground/40"
+      class="pointer-events-none absolute inset-0 rounded-sm border-[3px] border-dashed border-muted-foreground/40"
     />
 
     <!--
@@ -226,14 +234,39 @@ defineExpose({
       "
     >
       <!--
+        A lifted card carrying more than itself. The other photos in the block
+        are still in their own cells behind the cursor, so without this the drag
+        looks like it is moving one file and then moves several.
+      -->
+      <span
+        v-if="carryCount && carryCount > 1"
+        aria-hidden="true"
+        class="absolute -top-1.5 -right-1.5 z-10 min-w-5 rounded-full bg-foreground px-1.5 py-0.5 text-center text-[10px] leading-none font-semibold text-background shadow-sm"
+      >
+        {{ carryCount }}
+      </span>
+
+      <!--
         The square every tile occupies whatever shape its photograph is, which is
         what keeps a row of them lined up. No `overflow-hidden`: the selection
         border is drawn outside the photo and would be clipped away by it.
       -->
       <div class="relative aspect-square w-full">
-        <!-- The photo's own box, letterboxing excluded; the square until the
-             image has decoded and reported its shape. -->
-        <div class="absolute inset-0 m-auto" :style="photoBox">
+        <!--
+          The photo's own box, letterboxing excluded; the square until the image
+          has decoded and reported its shape.
+
+          It is also the thing a click selects. The square around it is layout —
+          the letterboxing beside a wide photo belongs to no picture, and a click
+          there falls through to the grid and clears the selection instead.
+          `.stop`, so a click that *did* hit a photo never reaches that handler.
+        -->
+        <div
+          data-select-target
+          class="absolute inset-0 m-auto"
+          :style="photoBox"
+          @click.stop="emit('select', $event)"
+        >
           <!-- White, because on a wall of bare photographs against dark chrome it
                is the only thing that cannot be mistaken for part of an image.
 
@@ -273,7 +306,14 @@ defineExpose({
           watch. Shimmer rather than an empty frame, for the same reason the
           fallback below exists.
         -->
-        <div v-if="decoding" class="preview-shimmer absolute inset-0" aria-hidden="true" />
+        <!-- `pointer-events-none` on both of these: they cover the photo's own
+             box, which is the square until an image reports a shape, and that
+             box is what takes a selecting click. -->
+        <div
+          v-if="decoding"
+          class="preview-shimmer pointer-events-none absolute inset-0"
+          aria-hidden="true"
+        />
 
         <!--
           A frame with nothing in it reads as a broken app. Say which it is: a
@@ -281,7 +321,7 @@ defineExpose({
         -->
         <div
           v-if="noPreview"
-          class="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center"
+          class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center"
         >
           <ImageOff class="size-5 text-muted-foreground/50" aria-hidden="true" />
           <p class="text-[10px] leading-tight font-medium text-muted-foreground">No preview</p>
@@ -296,7 +336,12 @@ defineExpose({
         below it: side by side, the arrow and the struck-through original eat
         most of the width and truncate away the only part you are checking.
       -->
-      <div class="mt-1.5 min-w-0 text-center" :title="entry.name">
+      <div
+        data-select-target
+        class="mt-1.5 min-w-0 text-center"
+        :title="entry.name"
+        @click.stop="emit('select', $event)"
+      >
         <p class="truncate text-[11px] leading-4" :class="renaming && 'font-medium'">
           {{ previewName ?? entry.name }}
         </p>

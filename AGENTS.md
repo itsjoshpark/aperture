@@ -182,6 +182,13 @@ only translates, and half of that one is the tiles changing size. Three things i
 - **The scroller is `overflow-x-hidden`.** A transform counts towards scrollable overflow, and cards
   mid-shrink are wider than the cells they are shrinking into.
 
+**A multi-tile drag is gathered into a contiguous block before it moves.** `useTileDrag` tracks one
+index and one lifted card, and that stays true for a selection of twelve: `GalleryGrid`'s `onBegin`
+reorders the draft so the selection sits as one run around the pressed tile, and returns the corrected
+index. From there the block moves through `gatherRun` as a unit, the tiles beside the cursor are the
+`carried` ones, and what the grid shows mid-drag is what the drop produces. Keeping the run contiguous
+is what lets `hitTest` go on answering with a single cell.
+
 **`Cmd`/`Ctrl` + `O` sits above the rest of the key map, deliberately.** `useKeyboard` returns early
 when there is no folder, so inside the `switch` the chord would work only once a folder was already
 open — the half that matters least. It also precedes `handlesItsOwnKeys`, since unlike the arrows it
@@ -192,7 +199,7 @@ means nothing in a text field. And nothing may be awaited before `openFolder()`:
 **Dialogs close themselves before your click handler runs.** Reka's `AlertDialogAction` dismisses the
 dialog as part of handling the click, so state cleared in the "dialog closed" path is already gone
 when the confirm handler looks for it, and the confirm silently does nothing. Both dialogs track
-_whether they are open_ separately from _what they are about_ (`deleteDialogOpen` / `pendingDelete`,
+_whether they are open_ separately from _what they are about_ (`deleteDialogOpen` / `pendingDeletes`,
 `guard.open` / `guard.pending`). Do not merge them back.
 
 **A tile's `<img>` is the photograph, not the square it sits in.** The square — `aspect-square` on the
@@ -203,6 +210,25 @@ rect to `useLargeViewTransition` as the origin the large view zooms out of. Putt
 on the `<img>` restores the square and breaks both — the border boxes in empty space, and the zoom
 starts at the wrong width for every photo that is taller than it is wide. Nothing outside
 `ImageTile.browser.test.ts` fails when it does.
+
+**The photograph is also the only thing a click selects.** The photo box and the caption carry
+`data-select-target` and stop their own clicks; everything else — the letterboxing, the gaps, the
+padding, below the last row — falls through to `GalleryGrid`, which reads it as background and clears
+the selection. So the two halves are one mechanism: widening the hit target back to the square would
+silently remove the only place left to click to deselect. Overlays drawn over the photo box (the
+decode shimmer, the "No preview" fallback) must stay `pointer-events-none`, or they swallow the click
+for exactly the tiles that have no `<img>` to aim at.
+
+**A pointerup that ends a drag still fires a `click`**, retargeted by the pointer capture onto the
+cell — which is not a select target, so the grid would read it as background and clear the selection
+you just dragged. `useTileDrag` swallows exactly one click after a press that really became a drag.
+
+**The selection is a set, a cursor and an anchor, written only by `setSelection`.** The cursor is what
+every single-photo surface means by "selected" (large view, filmstrip, `getTileRect`) and it is
+exported under the old name `selectedName`; the anchor is where a `Shift` range starts and is held
+apart from the cursor, so each range is redrawn from the same place instead of extending from the last
+one. The invariant the single writer exists to keep: the cursor and the anchor are members of the set,
+or the set is empty and both are null.
 
 **A dragged tile never leaves its cell.** `ImageTile`'s root is the grid cell and stays put — it is
 the dashed drop placeholder — while a card _inside_ it carries the transform following the cursor,

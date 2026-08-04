@@ -34,7 +34,7 @@ export function createAperture(options: ApertureOptions = {}) {
    * piece of state would be cleared out from under the confirm handler before it
    * ran — the delete would silently do nothing.
    */
-  const pendingDelete = shallowRef<ImageEntry | null>(null);
+  const pendingDeletes = shallowRef<ImageEntry[]>([]);
   const deleteDialogOpen = ref(false);
 
   /** Live column count, published by `GalleryGrid` as the container resizes. */
@@ -57,6 +57,8 @@ export function createAperture(options: ApertureOptions = {}) {
 
   const selectedIndex = computed(() => gallery.selectedIndexIn(displayed.value));
   const selectedEntry = computed(() => displayed.value[selectedIndex.value] ?? null);
+  /** The whole selection, in grid order — which is the order a delete or a drag wants. */
+  const selectedEntries = computed(() => gallery.selectedEntriesIn(displayed.value));
 
   async function openFolder(): Promise<void> {
     await guard.attempt(async () => {
@@ -81,8 +83,8 @@ export function createAperture(options: ApertureOptions = {}) {
 
   // ---------------------------------------------------------------- selection
 
-  function moveSelectionBy(direction: MoveDirection): void {
-    gallery.moveBy(direction, columns.value, displayed.value);
+  function moveSelectionBy(direction: MoveDirection, extend = false): void {
+    gallery.moveBy(direction, columns.value, displayed.value, extend);
   }
 
   function openLargeView(): void {
@@ -95,34 +97,36 @@ export function createAperture(options: ApertureOptions = {}) {
 
   // ------------------------------------------------------------------- delete
 
-  function askToDelete(entry: ImageEntry | null = selectedEntry.value): void {
-    if (!entry) return;
-    pendingDelete.value = entry;
+  function askToDelete(entries: ImageEntry[] = selectedEntries.value): void {
+    if (entries.length === 0) return;
+    pendingDeletes.value = entries;
     deleteDialogOpen.value = true;
   }
 
   async function confirmDelete(): Promise<void> {
-    const entry = pendingDelete.value;
+    const entries = pendingDeletes.value;
     deleteDialogOpen.value = false;
-    pendingDelete.value = null;
-    if (!entry) return;
+    pendingDeletes.value = [];
+    if (entries.length === 0) return;
 
+    const names = entries.map((entry) => entry.name);
     busy.value = true;
     try {
-      // Shrink the tile out first, then drop it from the list so the survivors
-      // animate into the gap rather than snapping shut around a vanished cell.
-      gallery.removingName.value = entry.name;
+      // Shrink the tiles out first, then drop them from the list so the
+      // survivors animate into the gap rather than snapping shut around
+      // vanished cells. One wait for the whole selection, not one each.
+      gallery.removingNames.value = new Set(names);
       await wait(motion.duration(REMOVE_DURATION));
-      await gallery.remove(entry.name, displayed.value);
-      if (rename.active.value) rename.forget(entry.name);
+      await gallery.removeMany(names, displayed.value);
+      if (rename.active.value) for (const name of names) rename.forget(name);
 
       // Deleting the last image leaves the large view with nothing to show.
       if (displayed.value.length === 0) gallery.view.value = "grid";
     } catch (cause) {
       gallery.error.value =
-        cause instanceof Error ? cause.message : `Could not delete ${entry.name}.`;
+        cause instanceof Error ? cause.message : `Could not delete ${names.join(", ")}.`;
     } finally {
-      gallery.removingName.value = null;
+      gallery.removingNames.value = new Set();
       busy.value = false;
     }
   }
@@ -158,7 +162,8 @@ export function createAperture(options: ApertureOptions = {}) {
     displayed,
     selectedIndex,
     selectedEntry,
-    pendingDelete,
+    selectedEntries,
+    pendingDeletes,
     deleteDialogOpen,
     busy,
     hasFolder: computed(() => gallery.port.value !== null),

@@ -43,7 +43,7 @@ const count = computed(() => aperture.displayed.value.length);
         size="sm"
         class="gap-1.5"
         aria-keyshortcuts="Delete"
-        :disabled="!aperture.selectedEntry.value"
+        :disabled="aperture.selectedEntries.value.length === 0"
         @click="aperture.askToDelete()"
       >
         <Trash2 class="size-4" />

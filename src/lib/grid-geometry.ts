@@ -17,7 +17,7 @@ export interface GridMetrics {
 
 export type MoveDirection = "left" | "right" | "up" | "down" | "home" | "end";
 
-function clamp(value: number, min: number, max: number): number {
+export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
@@ -160,4 +160,19 @@ export function reorder<T>(items: T[], from: number, to: number): T[] {
   const [moved] = next.splice(from, 1);
   next.splice(clamp(to, 0, next.length), 0, moved!);
   return next;
+}
+
+/**
+ * Lift `run` out of `items` — wherever its members are scattered — and put it
+ * back as one block beginning at `start`, keeping the run's own order.
+ *
+ * This is how a selection of several moves: as one thing. `start` counts in the
+ * array with the run already taken out of it, which is what both a drag and an
+ * arrow-key nudge mean by where they are dropping it.
+ */
+export function gatherRun<T>(items: T[], run: T[], start: number): T[] {
+  const moving = new Set(run);
+  const rest = items.filter((item) => !moving.has(item));
+  const at = clamp(start, 0, rest.length);
+  return [...rest.slice(0, at), ...run, ...rest.slice(at)];
 }

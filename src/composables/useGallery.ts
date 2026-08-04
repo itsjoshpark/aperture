@@ -78,15 +78,29 @@ export function useGallery() {
   /**
    * Selection is held by filename, not index. Sorting, deleting, renaming and
    * undoing all reshuffle the list, and every one of them should leave the same
-   * photo selected.
+   * photos selected.
    */
-  const selectedName = ref<string | null>(null);
+  const selectedNames = ref<Set<string>>(new Set());
 
   /**
-   * Set while a tile is playing its removal animation, so the grid can shrink it
-   * out before the array changes and the survivors slide up.
+   * The one selected photo the rest of the app still thinks in terms of: where
+   * the arrows move from, what the large view shows, what the filmstrip marks.
+   * Always a member of `selectedNames`, or null when nothing is selected.
    */
-  const removingName = ref<string | null>(null);
+  const cursorName = ref<string | null>(null);
+
+  /**
+   * Where a `Shift` range starts. Held apart from the cursor because a range is
+   * redrawn from the same anchor every time it is extended — moving it with the
+   * cursor would make each press extend from the last one instead.
+   */
+  const anchorName = ref<string | null>(null);
+
+  /**
+   * Set while tiles are playing their removal animation, so the grid can shrink
+   * them out before the array changes and the survivors slide up.
+   */
+  const removingNames = ref<Set<string>>(new Set());
 
   watch(tileSize, storeTileSize);
 
@@ -96,8 +110,12 @@ export function useGallery() {
   /** Grid order. Rename mode overrides this with its own draft order. */
   const sorted = computed(() => sortEntries(entries.value, sort.value));
 
+  /** The cursor's index, which is what "the selection" means to a single-photo view. */
   const selectedIndexIn = (list: ImageEntry[]) =>
-    selectedName.value === null ? -1 : list.findIndex((entry) => entry.name === selectedName.value);
+    cursorName.value === null ? -1 : list.findIndex((entry) => entry.name === cursorName.value);
+
+  const selectedEntriesIn = (list: ImageEntry[]) =>
+    list.filter((entry) => selectedNames.value.has(entry.name));
 
   async function open(next: FileSystemPort): Promise<void> {
     loading.value = true;
@@ -106,7 +124,10 @@ export function useGallery() {
       thumbnails.clear();
       port.value = next;
       await refresh();
-      selectedName.value = sorted.value[0]?.name ?? null;
+      // A folder opens with nothing selected, the way a Finder window does. The
+      // first arrow press lands on the first image, so the keyboard route in
+      // costs one key rather than the folder guessing at a photo you might want.
+      clearSelection();
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : "Could not read that folder.";
       port.value = null;
@@ -124,7 +145,7 @@ export function useGallery() {
     port.value = null;
     entries.value = [];
     allNames.value = [];
-    selectedName.value = null;
+    clearSelection();
     view.value = "grid";
     leftoverTempNames.value = [];
   }
@@ -137,45 +158,162 @@ export function useGallery() {
     allNames.value = await active.listAllNames();
     leftoverTempNames.value = findLeftoverTempNames(allNames.value);
 
-    // The selected file may have been renamed or deleted out from under us.
-    if (!entries.value.some((entry) => entry.name === selectedName.value)) {
-      selectedName.value = sorted.value[0]?.name ?? null;
-    }
-  }
-
-  function select(name: string | null): void {
-    selectedName.value = name;
-  }
-
-  /** Arrow-key navigation. Never clears the selection. */
-  function moveBy(direction: MoveDirection, columns: number, list: ImageEntry[]): void {
-    if (list.length === 0) return;
-    const next = moveSelection(selectedIndexIn(list), direction, columns, list.length);
-    if (next >= 0) selectedName.value = list[next]!.name;
+    // Selected files may have been renamed or deleted out from under us. Drop
+    // the names that are gone rather than guessing at a replacement: after a
+    // rename that is every one of them, and landing back on the first photo in
+    // the folder is not where you were.
+    const surviving = new Set(entries.value.map((entry) => entry.name));
+    setSelection(
+      [...selectedNames.value].filter((name) => surviving.has(name)),
+      cursorName.value,
+      anchorName.value,
+    );
   }
 
   /**
-   * Deletes a file for good. The caller is responsible for confirming first —
+   * The single writer for all three pieces of selection state, so the invariant
+   * they share — the cursor and the anchor are members of the set, or the set is
+   * empty and both are null — cannot be broken one caller at a time.
+   */
+  function setSelection(
+    names: Iterable<string>,
+    cursor: string | null,
+    anchor: string | null = cursor,
+  ): void {
+    const next = new Set(names);
+    selectedNames.value = next;
+    cursorName.value = cursor !== null && next.has(cursor) ? cursor : null;
+    anchorName.value = anchor !== null && next.has(anchor) ? anchor : cursorName.value;
+  }
+
+  /** Replaces the whole selection with one photo, or clears it. */
+  function select(name: string | null): void {
+    setSelection(name === null ? [] : [name], name);
+  }
+
+  function clearSelection(): void {
+    setSelection([], null);
+  }
+
+  /**
+   * `Cmd`/`Ctrl` + click. The clicked photo becomes the anchor whether it was
+   * added or removed, so a `Shift` + click after it ranges from where you last
+   * pointed — and deselecting the cursor hands it to the nearest survivor rather
+   * than leaving it pointing at an unselected tile.
+   */
+  function toggle(name: string, list: ImageEntry[]): void {
+    const next = new Set(selectedNames.value);
+    if (next.delete(name)) {
+      setSelection(
+        next,
+        cursorName.value === name ? nearestIn(list, name, next) : cursorName.value,
+      );
+    } else {
+      next.add(name);
+      setSelection(next, name);
+    }
+  }
+
+  /** `Shift` + click: the range from the anchor to here, replacing what was selected. */
+  function extendTo(name: string, list: ImageEntry[]): void {
+    const from = anchorName.value ?? cursorName.value ?? name;
+    setSelection(rangeIn(list, from, name), name, from);
+  }
+
+  /**
+   * Arrow-key navigation. `extend` redraws the range from the standing anchor,
+   * so holding `Shift` and walking back over your own tracks shrinks the
+   * selection again rather than only ever growing it.
+   */
+  function moveBy(
+    direction: MoveDirection,
+    columns: number,
+    list: ImageEntry[],
+    extend = false,
+  ): void {
+    if (list.length === 0) return;
+    const next = moveSelection(selectedIndexIn(list), direction, columns, list.length);
+    const name = list[next]?.name;
+    if (name === undefined) return;
+
+    if (!extend) {
+      select(name);
+      return;
+    }
+    const anchor = anchorName.value ?? cursorName.value ?? name;
+    setSelection(rangeIn(list, anchor, name), name, anchor);
+  }
+
+  /** Every name between two entries of `list`, inclusive, in list order. */
+  function rangeIn(list: ImageEntry[], from: string, to: string): string[] {
+    const end = list.findIndex((entry) => entry.name === to);
+    if (end === -1) return [];
+    // An anchor that has been deleted or renamed away leaves nothing to range
+    // across; the photo you just clicked is still a perfectly good selection.
+    const start = list.findIndex((entry) => entry.name === from);
+    if (start === -1) return [to];
+    return list.slice(Math.min(start, end), Math.max(start, end) + 1).map((entry) => entry.name);
+  }
+
+  /** The member of `within` closest to `name` in `list`, searching forwards first. */
+  function nearestIn(list: ImageEntry[], name: string, within: Set<string>): string | null {
+    const at = list.findIndex((entry) => entry.name === name);
+    if (at === -1) return null;
+    for (let step = 1; step < list.length; step += 1) {
+      for (const candidate of [list[at + step], list[at - step]]) {
+        if (candidate && within.has(candidate.name)) return candidate.name;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Deletes files for good. The caller is responsible for confirming first —
    * there is no undo for this, only for renames.
    *
-   * Selection lands on the next image so you can keep pressing Delete to cull a
-   * run of shots without reaching for the mouse.
+   * Selection lands on the next surviving image so you can keep pressing Delete
+   * to cull a run of shots without reaching for the mouse.
    */
-  async function remove(name: string, list: ImageEntry[]): Promise<void> {
+  async function removeMany(names: string[], list: ImageEntry[]): Promise<void> {
     const active = port.value;
-    if (!active) return;
+    if (!active || names.length === 0) return;
 
-    const at = list.findIndex((entry) => entry.name === name);
-    const successor = list[at + 1] ?? list[at - 1] ?? null;
+    // Worked out before anything goes, while the list still says which survivor
+    // follows the last of them: the photo after the deleted run, or the one
+    // before it when the run reached the end.
+    const doomed = new Set(names);
+    const last = list.reduce((at, entry, index) => (doomed.has(entry.name) ? index : at), -1);
+    const survivor =
+      list.slice(last + 1).find((entry) => !doomed.has(entry.name)) ??
+      list
+        .slice(0, last)
+        .reverse()
+        .find((entry) => !doomed.has(entry.name)) ??
+      null;
 
-    await active.delete(name);
-    thumbnails.invalidate(name);
-    entries.value = entries.value.filter((entry) => entry.name !== name);
+    // One file failing must not strand the ones already off the disk in the
+    // grid, so the lists are rebuilt from what actually went and the failure is
+    // raised afterwards.
+    const gone = new Set<string>();
+    let failure: unknown = null;
+    for (const name of names) {
+      try {
+        await active.delete(name);
+      } catch (cause) {
+        failure ??= cause;
+        continue;
+      }
+      thumbnails.invalidate(name);
+      gone.add(name);
+    }
+
+    entries.value = entries.value.filter((entry) => !gone.has(entry.name));
     // Deleting does not re-list the folder, so this is what keeps the name list
     // honest in between refreshes.
-    allNames.value = allNames.value.filter((existing) => existing !== name);
+    allNames.value = allNames.value.filter((existing) => !gone.has(existing));
 
-    if (selectedName.value === name) selectedName.value = successor?.name ?? null;
+    select(survivor?.name ?? null);
+    if (failure !== null) throw failure;
   }
 
   return {
@@ -188,19 +326,25 @@ export function useGallery() {
     view,
     loading,
     error,
-    selectedName,
-    removingName,
+    selectedNames,
+    /** The cursor, under the name the single-photo views have always known it by. */
+    selectedName: computed(() => cursorName.value),
+    removingNames,
     leftoverTempNames,
     thumbnails,
     label: computed(() => port.value?.label ?? ""),
     isEmpty: computed(() => !loading.value && entries.value.length === 0),
     selectedIndexIn,
+    selectedEntriesIn,
     open,
     close,
     refresh,
     select,
+    clearSelection,
+    toggle,
+    extendTo,
     moveBy,
-    remove,
+    removeMany,
   };
 }
 

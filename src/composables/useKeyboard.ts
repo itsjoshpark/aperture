@@ -1,14 +1,14 @@
 import { useEventListener } from "@vueuse/core";
+import { clamp } from "@/lib/grid-geometry";
 import type { Aperture } from "./useAperture";
 
 /**
  * The app's keyboard map, dispatched on the current view.
  *
- * One rule is worth stating outright because it is easy to "fix" by mistake:
- * **Escape never clears the selection.** In the grid it leaves rename mode and
- * otherwise does nothing; in large view it goes back to the grid. Losing your
- * place in a folder of two thousand photos because you pressed Escape would be
- * its own small tragedy.
+ * Escape unwinds one layer at a time and the selection is the last of them: out
+ * of the large view, then out of rename mode, and only with neither of those
+ * left does it clear what is selected. Skipping a layer would throw away a
+ * rename in progress on the way to deselecting a photo.
  */
 export function useKeyboard(aperture: Aperture) {
   useEventListener(window, "keydown", (event: KeyboardEvent) => {
@@ -34,6 +34,8 @@ export function useKeyboard(aperture: Aperture) {
 
     const inLargeView = aperture.gallery.view.value === "large";
     const reorderModifier = event.metaKey || event.ctrlKey;
+    // Extending a selection means nothing when only one photo is on screen.
+    const extend = event.shiftKey && !reorderModifier && !inLargeView;
 
     switch (event.key) {
       case "ArrowLeft":
@@ -42,7 +44,7 @@ export function useKeyboard(aperture: Aperture) {
         if (reorderModifier && !inLargeView) {
           reorderSelected(aperture, direction === "left" ? -1 : 1);
         } else {
-          aperture.moveSelectionBy(direction);
+          aperture.moveSelectionBy(direction, extend);
         }
         break;
       }
@@ -56,17 +58,17 @@ export function useKeyboard(aperture: Aperture) {
             event.key === "ArrowUp" ? -aperture.columns.value : aperture.columns.value,
           );
         } else {
-          aperture.moveSelectionBy(event.key === "ArrowUp" ? "up" : "down");
+          aperture.moveSelectionBy(event.key === "ArrowUp" ? "up" : "down", extend);
         }
         break;
       }
 
       case "Home":
-        aperture.moveSelectionBy("home");
+        aperture.moveSelectionBy("home", extend);
         break;
 
       case "End":
-        aperture.moveSelectionBy("end");
+        aperture.moveSelectionBy("end", extend);
         break;
 
       case " ":
@@ -84,9 +86,9 @@ export function useKeyboard(aperture: Aperture) {
         break;
 
       case "Escape":
-        // Deliberately leaves the selection alone.
         if (inLargeView) aperture.closeLargeView();
-        else aperture.exitRename();
+        else if (aperture.rename.active.value) aperture.exitRename();
+        else aperture.gallery.clearSelection();
         break;
 
       default:
@@ -100,15 +102,28 @@ export function useKeyboard(aperture: Aperture) {
 /**
  * Keyboard reordering, so arranging images is not mouse-only. Entering rename
  * mode on the first press mirrors what dragging does.
+ *
+ * A selection of several moves as one run, gathered around the cursor on the
+ * first press the same way a drag gathers it — otherwise each press would deal
+ * the photos out one at a time and the arrangement would come apart.
  */
 function reorderSelected(aperture: Aperture, delta: number): void {
   if (!aperture.rename.active.value) aperture.enterRename();
 
-  const from = aperture.selectedIndex.value;
-  if (from < 0) return;
+  const list = aperture.displayed.value;
+  const carried = aperture.selectedEntries.value;
+  if (carried.length === 0) return;
 
-  const to = Math.min(Math.max(from + delta, 0), aperture.displayed.value.length - 1);
-  if (to !== from) aperture.rename.move(from, to);
+  const first = list.indexOf(carried[0]!);
+  const contiguous = carried.every((entry, at) => list[first + at] === entry);
+  const start = contiguous
+    ? first
+    : clamp(aperture.selectedIndex.value, 0, list.length - carried.length);
+
+  const to = clamp(start + delta, 0, list.length - carried.length);
+  if (contiguous && to === start) return;
+
+  aperture.rename.moveRun(carried, to);
 }
 
 /**
