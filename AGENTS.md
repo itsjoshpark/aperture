@@ -231,7 +231,8 @@ one. The invariant the single writer exists to keep: the cursor and the anchor a
 or the set is empty and both are null.
 
 **A dragged tile never leaves its cell.** `ImageTile`'s root is the grid cell and stays put — it is
-the dashed drop placeholder — while a card _inside_ it carries the transform following the cursor,
+what hosts the dashed drop placeholder, which rebuilds the card's square-then-photo-box to trace the
+photograph rather than the cell — while a card _inside_ it carries the transform following the cursor,
 and `useTileDrag` measures the root for that offset. Moving the transform onto the root brings back
 the correction term the old code needed and leaves no cell to draw the placeholder in. The root also
 gets `transition: none` while dragging, or `TransitionGroup` FLIPs the placeholder over 260ms and the

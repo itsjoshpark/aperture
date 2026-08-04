@@ -110,7 +110,11 @@ test("leaves a placeholder in the cell and offsets the card", async () => {
   const cellNow = cell.getBoundingClientRect();
   expect(cellNow.left).toBeCloseTo(atRest.left, 0);
   expect(cellNow.top).toBeCloseTo(atRest.top, 0);
-  expect(placeholder!.getBoundingClientRect().width).toBeCloseTo(cellNow.width, 0);
+
+  // And it stops above the caption rather than boxing the whole cell in.
+  expect(placeholder!.getBoundingClientRect().bottom).toBeLessThan(
+    screen.getByText("photo.png").element().getBoundingClientRect().top,
+  );
 
   // The card has.
   const lifted = card.getBoundingClientRect();
@@ -119,29 +123,40 @@ test("leaves a placeholder in the cell and offsets the card", async () => {
 });
 
 /**
- * The dashed outline and the selection band are the same idea drawn twice — this
- * is where the tile will be, this is the tile you have — so a difference in
- * weight between them reads as an accident.
+ * The dashed outline and the selection band are the same claim drawn twice —
+ * this is where the photo will be, this is the photo you have — so they have to
+ * land on the same pixels. A wide photo is what makes that a real test: boxing
+ * the cell instead of the picture is invisible on a square one.
  */
-test("draws the drop placeholder at the weight of the selection border", async () => {
-  const props = {
-    entry: entryFor(),
-    cache: new ThumbnailCache(),
-    selected: true,
-    dragging: true,
-    translate: { x: 0, y: 0 },
-  };
-  const screen = render(ImageTile, { props });
-  await expect.element(screen.getByRole("img")).toBeVisible();
+test("puts the drop placeholder exactly where the selection border will be", async () => {
+  const screen = render(ImageTile, {
+    props: {
+      entry: entryOver("wide.png", await pngOf(400, 120), "image/png"),
+      cache: new ThumbnailCache(),
+      selected: true,
+      dragging: true,
+      translate: { x: 0, y: 0 },
+    },
+  });
+  screen.container.style.width = "160px";
+
+  const image = screen.getByRole("img", { name: "wide.png" });
+  await expect.element(image).toBeVisible();
+  const photo = () => image.element().getBoundingClientRect();
+  await expect.poll(() => photo().width !== photo().height).toBe(true);
 
   const cell = screen.getByRole("gridcell").element();
   const placeholder = cell.querySelector("[data-drop-placeholder]")!;
   expect(getComputedStyle(placeholder).borderTopWidth).toBe("3px");
 
-  // The band the selection draws is the inner box's inset from the outer one.
-  const outer = cell.querySelector("[data-selection]")!.getBoundingClientRect();
-  const inner = cell.querySelector("[data-selection] > span")!.getBoundingClientRect();
-  expect(inner.left - outer.left).toBeCloseTo(3, 0);
+  const ghost = placeholder.getBoundingClientRect();
+  const border = cell.querySelector("[data-selection]")!.getBoundingClientRect();
+  for (const edge of ["left", "top", "right", "bottom"] as const) {
+    expect(ghost[edge]).toBeCloseTo(border[edge], 0);
+  }
+
+  // Which is to say: round the photograph, not round the square it sits in.
+  expect(ghost.height).toBeLessThan(cell.getBoundingClientRect().width);
 });
 
 test("has no placeholder when it is not being dragged", async () => {

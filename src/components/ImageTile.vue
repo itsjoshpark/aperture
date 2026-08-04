@@ -193,13 +193,26 @@ defineExpose({
       Where the tile will land when the button comes up. The tile itself stays
       in this cell — only the card below is offset — so an outline drawn on its
       own layer, costing no layout, is the whole of it.
+
+      It traces the photograph, not the cell: the square and the caption are
+      layout, and a dashed box round them promises the drop a shape it will not
+      have. The two spans below rebuild the same square-then-photo-box the card
+      does, because the card itself is away under the cursor. At `-inset-[5px]`
+      with a 3px stroke it lands on exactly the pixels the selection ring will
+      occupy once the photo is home.
     -->
     <span
       v-if="dragging"
-      data-drop-placeholder
       aria-hidden="true"
-      class="pointer-events-none absolute inset-0 rounded-sm border-[3px] border-dashed border-muted-foreground/40"
-    />
+      class="pointer-events-none absolute top-0 left-0 aspect-square w-full"
+    >
+      <span class="absolute inset-0 m-auto" :style="photoBox">
+        <span
+          data-drop-placeholder
+          class="absolute -inset-[5px] rounded-sm border-[3px] border-dashed border-muted-foreground/40"
+        />
+      </span>
+    </span>
 
     <!--
       The tile's contents. It has no surface of its own — the photo is the tile —
