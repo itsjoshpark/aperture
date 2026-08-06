@@ -10,7 +10,7 @@
     "check": "vp check",
     "test": "vp test",
     "e2e": "playwright test",
-    "e2e:production": "APERTURE_PRODUCTION=1 playwright test",
+    "e2e:production": "playwright test --config playwright.production.config.ts",
     "check:bundle": "node scripts/check-bundle.mjs",
     "prepare": "vp config"
   },
