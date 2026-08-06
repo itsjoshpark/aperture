@@ -1,7 +1,7 @@
 import { HEIC_64, jpegWithDateTaken, PNG_64 } from "@/lib/fs/fixtures";
 import { MemoryAdapter, type MemoryFile } from "@/lib/fs/memory-adapter";
 import type { FolderSource } from "@/lib/fs/folder-source";
-import type { FileSystemPort } from "@/lib/fs/types";
+import { FileOperationError, type FileSystemPort } from "@/lib/fs/types";
 import { createApertureApp } from "@/mount";
 
 /**
@@ -70,7 +70,26 @@ function takenAt(minutes: number): string {
   ).padStart(2, "0")}:00`;
 }
 
-const adapter = new MemoryAdapter(seedFiles(), { label: "Test Folder" });
+/**
+ * `?failDelete=a.jpg,b.jpg` makes those deletes fail the way a real one does —
+ * a file held open by another app, a permission that lapsed. There is no other
+ * way to reach the app's failure path from a test: the disk under a real folder
+ * does what it likes, and the in-memory one always succeeds.
+ */
+function failingDeletes(): ((name: string) => void) | undefined {
+  const doomed = new URLSearchParams(window.location.search).get("failDelete");
+  if (!doomed) return undefined;
+
+  const names = new Set(doomed.split(",").filter(Boolean));
+  return (name: string) => {
+    if (names.has(name)) throw new FileOperationError("Permission denied", name);
+  };
+}
+
+const adapter = new MemoryAdapter(seedFiles(), {
+  label: "Test Folder",
+  beforeDelete: failingDeletes(),
+});
 
 const source: FolderSource = {
   open: async (): Promise<FileSystemPort | null> => adapter,

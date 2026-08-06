@@ -11,11 +11,13 @@ const HARNESS = "e2e/harness.html";
 async function openGallery(
   page: Page,
   files?: string[],
-  options: { taken?: boolean } = {},
+  options: { taken?: boolean; failDelete?: string[] } = {},
 ): Promise<void> {
-  const params = [files ? `files=${files.join(",")}` : "", options.taken ? "taken" : ""].filter(
-    Boolean,
-  );
+  const params = [
+    files ? `files=${files.join(",")}` : "",
+    options.taken ? "taken" : "",
+    options.failDelete ? `failDelete=${options.failDelete.join(",")}` : "",
+  ].filter(Boolean);
   const query = params.length > 0 ? `?${params.join("&")}` : "";
   await page.goto(`${HARNESS}${query}`);
   await page.getByRole("button", { name: "Open folder…" }).click();
@@ -346,6 +348,63 @@ test.describe("delete", () => {
     await expect(page.getByRole("gridcell")).toHaveCount(2);
     expect(await diskNames(page)).toEqual(["c.jpg", "d.jpg"]);
     await expect(selected(page)).toHaveText([/c\.jpg/]);
+  });
+
+  test("says so when the disk refuses a delete", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg"], { failDelete: ["a.jpg"] });
+
+    await clickTile(page, "a.jpg");
+    await page.keyboard.press("Delete");
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+
+    // The file is still there, so the banner is the only thing that can say why.
+    await expect(page.getByRole("alert")).toContainText("Could not delete a.jpg");
+    await expect(page.getByRole("alert")).toContainText("Permission denied");
+    await expect(page.getByRole("gridcell")).toHaveCount(2);
+    expect(await diskNames(page)).toEqual(["a.jpg", "b.jpg"]);
+  });
+
+  test("names only the files that survived a partial failure", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"], { failDelete: ["a.jpg"] });
+
+    await clickTile(page, "a.jpg");
+    await clickTile(page, "b.jpg", ["Shift"]);
+    await page.keyboard.press("Delete");
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+
+    // `b.jpg` went, so naming it as well would send you looking for a file that
+    // is not there.
+    await expect(page.getByRole("alert")).toContainText("Could not delete a.jpg");
+    await expect(page.getByRole("alert")).not.toContainText("b.jpg");
+    expect(await diskNames(page)).toEqual(["a.jpg", "c.jpg"]);
+  });
+
+  test("clears the message once a delete works", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg"], { failDelete: ["a.jpg"] });
+
+    await clickTile(page, "a.jpg");
+    await page.keyboard.press("Delete");
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+    await expect(page.getByRole("alert")).toBeVisible();
+
+    await clickTile(page, "b.jpg");
+    await page.keyboard.press("Delete");
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+
+    await expect(page.getByRole("alert")).toBeHidden();
+  });
+
+  test("dismisses the message by hand", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg"], { failDelete: ["a.jpg"] });
+
+    await clickTile(page, "a.jpg");
+    await page.keyboard.press("Delete");
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+    await expect(page.getByRole("alert")).toBeVisible();
+
+    await page.getByRole("button", { name: "Dismiss" }).click();
+
+    await expect(page.getByRole("alert")).toBeHidden();
   });
 });
 

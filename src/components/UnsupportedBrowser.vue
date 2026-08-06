@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Aperture } from "lucide-vue-next";
+import { Aperture } from "@lucide/vue";
 </script>
 
 <template>

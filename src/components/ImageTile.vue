@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useIntersectionObserver } from "@vueuse/core";
-import { ImageOff } from "lucide-vue-next";
+import { ImageOff } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { isPreviewable } from "@/lib/file-names";
 import type { ImageEntry } from "@/lib/fs/types";

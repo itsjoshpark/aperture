@@ -1,0 +1,29 @@
+name: Setup
+description: Node, pnpm, dependencies and the Chromium both test suites drive.
+
+# Both jobs need the identical five steps: the `browser` Vitest project runs in
+# real Chromium, so it is not only the Playwright job that has to install one.
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+
+    - uses: actions/setup-node@v5
+      with:
+        node-version: 24
+        cache: pnpm
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      shell: bash
+
+    - name: Cache Playwright browsers
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+    - name: Install Chromium
+      run: pnpm exec playwright install --with-deps chromium
+      shell: bash

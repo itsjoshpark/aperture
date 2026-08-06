@@ -36,6 +36,21 @@ export default defineConfig({
   // real layout (grid geometry, IntersectionObserver, scrollIntoView) runs in a real
   // Chromium, which CI already installs for Playwright.
   test: {
+    // Reported, not gated. The number worth watching is which *branches* of the
+    // fs and preview error handling nothing reaches, and a threshold on the
+    // total hides that behind an average.
+    coverage: {
+      reporter: ["text-summary", "html"],
+      include: ["src/**/*.ts", "src/**/*.vue"],
+      exclude: [
+        "src/components/ui/**", // shadcn-vue's output, vendored
+        "src/lib/fs/fixtures.ts", // test-only, and mostly base64
+        "src/lib/fs/memory-adapter.ts", // the fake itself
+        "src/**/*.test.ts",
+        "src/types/**",
+        "src/env.d.ts",
+      ],
+    },
     projects: [
       {
         extends: true,

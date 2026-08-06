@@ -2,7 +2,7 @@
 import { Slider } from "@/components/ui/slider";
 import { useAperture } from "@/composables/useAperture";
 import { stopIndexFor } from "@/lib/grid-geometry";
-import { ZoomIn, ZoomOut } from "lucide-vue-next";
+import { ZoomIn, ZoomOut } from "@lucide/vue";
 import { computed, shallowRef } from "vue";
 
 const aperture = useAperture();

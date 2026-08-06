@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useAperture } from "@/composables/useAperture";
-import { AlertTriangle, Check, Info, Undo2 } from "lucide-vue-next";
+import { AlertTriangle, Check, Info, Undo2 } from "@lucide/vue";
 import { computed } from "vue";
 
 const aperture = useAperture();

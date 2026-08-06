@@ -99,11 +99,16 @@ export function createAperture(options: ApertureOptions = {}) {
    * so the one the eye is following.
    */
   function nudgeSelection(delta: number): void {
+    // Before entering rename mode, not after: nothing selected is nothing to
+    // arrange, and opening a session first puts the rename bar up over a press
+    // that could not have moved anything.
+    if (selectedEntries.value.length === 0) return;
     if (!rename.active.value) enterRename();
 
     const list = displayed.value;
+    // Re-read: entering rename mode swaps `displayed` to the draft, and the run
+    // has to be the entries in the list the move is about to be made against.
     const run = selectedEntries.value;
-    if (run.length === 0) return;
 
     const first = list.indexOf(run[0]!);
     const contiguous = run.every((entry, at) => list[first + at] === entry);
@@ -139,6 +144,9 @@ export function createAperture(options: ApertureOptions = {}) {
 
     const names = entries.map((entry) => entry.name);
     busy.value = true;
+    // Cleared up front so the banner always describes this attempt rather than
+    // leaving the previous failure standing over a delete that then worked.
+    gallery.error.value = null;
     try {
       // Shrink the tiles out first, then drop them from the list so the
       // survivors animate into the gap rather than snapping shut around
@@ -151,12 +159,29 @@ export function createAperture(options: ApertureOptions = {}) {
       // Deleting the last image leaves the large view with nothing to show.
       if (displayed.value.length === 0) gallery.view.value = "grid";
     } catch (cause) {
-      gallery.error.value =
-        cause instanceof Error ? cause.message : `Could not delete ${names.join(", ")}.`;
+      gallery.error.value = describeDeleteFailure(cause, names, gallery.entries.value);
     } finally {
       gallery.removingNames.value = new Set();
       busy.value = false;
     }
+  }
+
+  /**
+   * A delete failure has to name files. `removeMany` deletes everything it can
+   * and raises only the first failure, so the grid is left showing some of what
+   * you asked to go and none of why — and the reason alone ("Permission denied")
+   * does not say which. What is still listed is the honest answer.
+   */
+  function describeDeleteFailure(
+    cause: unknown,
+    attempted: string[],
+    remaining: ImageEntry[],
+  ): string {
+    const still = new Set(remaining.map((entry) => entry.name));
+    const kept = attempted.filter((name) => still.has(name));
+    const subject = kept.length > 0 ? kept : attempted;
+    const reason = cause instanceof Error ? cause.message : "the disk refused it";
+    return `Could not delete ${subject.join(", ")} — ${reason}.`;
   }
 
   // ------------------------------------------------------------------- rename

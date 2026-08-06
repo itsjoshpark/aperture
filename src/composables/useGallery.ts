@@ -160,6 +160,9 @@ export function useGallery() {
     entries.value = await active.list();
     allNames.value = await active.listAllNames();
     leftoverTempNames.value = findLeftoverTempNames(allNames.value);
+    // A message describes the operation that failed, not the folder. Once a
+    // later one has succeeded it is describing something that is no longer true.
+    error.value = null;
 
     // Selected files may have been renamed or deleted out from under us. Drop
     // the names that are gone rather than guessing at a replacement: after a
@@ -351,6 +354,9 @@ export function useGallery() {
     open,
     close,
     refresh,
+    dismissError: () => {
+      error.value = null;
+    },
     select,
     clearSelection,
     toggle,

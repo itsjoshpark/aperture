@@ -11,6 +11,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Read-only by default, so the write scopes `deploy` needs read as the deliberate
+# escalation they are rather than as whatever the repository happens to grant.
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: verify
@@ -18,35 +23,34 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # The `browser` Vitest project runs in real Chromium, so this is needed
-      # here and not only in the e2e job.
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - uses: ./.github/actions/setup
 
       - name: Format, lint, typecheck
         run: pnpm check
 
       - name: Test
-        run: pnpm test --run
+        run: pnpm test run --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage
+          retention-days: 7
 
       - name: Build
         run: pnpm build
+
+      # The invariants in AGENTS.md that nothing else can see: the in-memory fake
+      # staying out of the entry graph, and `base` still being `/aperture/`.
+      - name: Check the bundle
+        run: pnpm check:bundle
+
+      # Runs here rather than in the e2e job because this is where `dist` already
+      # exists — the alternative is building it twice.
+      - name: Smoke-test the built app
+        run: pnpm e2e:production
 
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main'
@@ -60,24 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - uses: ./.github/actions/setup
 
       - name: Run Playwright
         run: pnpm e2e
