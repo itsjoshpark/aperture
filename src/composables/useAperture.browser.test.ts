@@ -56,6 +56,15 @@ describe("nudgeSelection", () => {
     expect(aperture.rename.active.value).toBe(true);
   });
 
+  test("nudging nothing does not open a rename session", async () => {
+    const aperture = await open(["a.jpg", "b.jpg", "c.jpg"]);
+
+    aperture.nudgeSelection(1);
+
+    expect(aperture.rename.active.value).toBe(false);
+    expect(order(aperture)).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+  });
+
   test("a contiguous run already at the end does not move", async () => {
     const aperture = await open(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
     aperture.gallery.select("a.jpg");

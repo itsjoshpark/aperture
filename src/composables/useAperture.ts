@@ -99,11 +99,16 @@ export function createAperture(options: ApertureOptions = {}) {
    * so the one the eye is following.
    */
   function nudgeSelection(delta: number): void {
+    // Before entering rename mode, not after: nothing selected is nothing to
+    // arrange, and opening a session first puts the rename bar up over a press
+    // that could not have moved anything.
+    if (selectedEntries.value.length === 0) return;
     if (!rename.active.value) enterRename();
 
     const list = displayed.value;
+    // Re-read: entering rename mode swaps `displayed` to the draft, and the run
+    // has to be the entries in the list the move is about to be made against.
     const run = selectedEntries.value;
-    if (run.length === 0) return;
 
     const first = list.indexOf(run[0]!);
     const contiguous = run.every((entry, at) => list[first + at] === entry);
