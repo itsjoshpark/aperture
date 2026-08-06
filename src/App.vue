@@ -3,6 +3,7 @@ import { shallowRef } from "vue";
 import AppToolbar from "@/components/AppToolbar.vue";
 import DeleteDialog from "@/components/DeleteDialog.vue";
 import DiscardChangesDialog from "@/components/DiscardChangesDialog.vue";
+import ErrorBanner from "@/components/ErrorBanner.vue";
 import GalleryGrid from "@/components/GalleryGrid.vue";
 import LandingScreen from "@/components/LandingScreen.vue";
 import LargeView from "@/components/LargeView.vue";
@@ -33,6 +34,7 @@ const largeView = useLargeViewTransition(aperture.motion, () => {
   <div v-else class="flex h-dvh flex-col">
     <AppToolbar />
     <RecoveryBanner />
+    <ErrorBanner />
 
     <GalleryGrid ref="grid" />
 

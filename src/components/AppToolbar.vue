@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { useAperture } from "@/composables/useAperture";
 import { OPEN_FOLDER_HINT } from "@/lib/platform";
-import { FolderOpen, Pencil, Trash2, Undo2 } from "lucide-vue-next";
+import { FolderOpen, Pencil, Trash2, Undo2 } from "@lucide/vue";
 import { computed } from "vue";
 import SortMenu from "./SortMenu.vue";
 

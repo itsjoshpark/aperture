@@ -18,6 +18,10 @@ Oxfmt and Rolldown.
 | `pnpm build` | `vue-tsc -b` then production build             |
 | `pnpm e2e`   | Playwright smoke suite                         |
 
+Plus two that run against `dist`, so `pnpm build` has to come first: `pnpm check:bundle` for the
+invariants under Build, and `pnpm e2e:production` for the built app over `vp preview`. Coverage is
+`pnpm test run --coverage` — reported, never gated.
+
 `.vite-hooks/pre-commit` runs `vp check --fix` on staged files. The scripts are thin wrappers, so if
 `vp` misbehaves (it is at 0.2.x) swap their bodies for `vite` / `vitest` / `oxlint` — no application
 code depends on Vite+.
@@ -271,10 +275,16 @@ whether the maths still holds.
 
 **`memory-adapter.ts` and `fixtures.ts` must never be reachable from `src/main.ts`.** The e2e harness
 has its own HTML entry; keeping the fake out of the production entry graph is what keeps it out of
-the bundle. `grep MemoryAdapter dist/assets/*.js` should find nothing.
+the bundle. `pnpm check:bundle` enforces this, by walking the imports out of `src/main.ts` rather
+than by reading the output — **do not check this by grepping `dist`**. Minification renames exported
+class names, so `grep MemoryAdapter dist/assets/*.js` finds nothing with the whole module sitting in
+the chunk: a check that reports success for the one thing it exists to catch.
 
 **Assets must go through Vite.** `base` is `/aperture/`, so a hardcoded leading-slash URL 404s in
-production.
+production. Vite rewrites the attributes in `index.html` itself, so what is left to get wrong is a
+URL built at runtime — `pnpm e2e:production` catches those by loading the built app over
+`vp preview` and asserting nothing 404s. That suite is also the only thing that ever runs the
+production bundle: `pnpm e2e` needs the harness, which is not a build input.
 
 ## Testing
 
@@ -287,6 +297,11 @@ assert nothing. Two Vitest projects instead:
 - **`browser`** (`*.browser.test.ts`, real Chromium via Playwright): anything depending on real
   layout, or on a browser API node lacks — `useGallery.browser.test.ts` is there because
   `localStorage` is, and a hand-written stub would only prove the stub works.
+
+**Every composable is a `browser` test, and not by preference.** `useUnsavedGuard` hands `window`
+straight to `useEventListener`, so `createAperture()` is a `ReferenceError` under node before any
+assertion runs — which puts `useAperture`, `useKeyboard` and anything else built on the store in the
+browser project whatever they are testing.
 
 Put a new test in `unit` unless it genuinely needs layout or a real browser API; if you find yourself
 mocking `getBoundingClientRect`, it belongs in `browser`. On top of both, `pnpm e2e` drives the whole

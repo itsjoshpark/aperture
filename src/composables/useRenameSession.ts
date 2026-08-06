@@ -86,10 +86,6 @@ export function useRenameSession(gallery: Gallery) {
     draft.value = gatherRun(draft.value, run, to);
   }
 
-  function setOrder(next: ImageEntry[]): void {
-    draft.value = next;
-  }
-
   /**
    * Drop a file that was deleted while a session was open.
    *
@@ -199,7 +195,6 @@ export function useRenameSession(gallery: Gallery) {
     reordered,
     begin,
     moveRun,
-    setOrder,
     forget,
     cancel,
     apply,

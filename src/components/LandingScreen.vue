@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { useAperture } from "@/composables/useAperture";
 import { OPEN_FOLDER_HINT } from "@/lib/platform";
-import { Aperture, FolderOpen } from "lucide-vue-next";
+import { Aperture, FolderOpen } from "@lucide/vue";
 
 const aperture = useAperture();
 </script>

@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { useAperture } from "@/composables/useAperture";
 import { isPreviewable } from "@/lib/file-names";
-import { ChevronLeft, ChevronRight, ImageOff, Trash2, X } from "lucide-vue-next";
+import { ChevronLeft, ChevronRight, ImageOff, Trash2, X } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import Filmstrip from "./Filmstrip.vue";
 

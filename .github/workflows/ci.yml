@@ -11,46 +11,50 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Read-only by default, so the write scopes `deploy` needs read as the deliberate
+# escalation they are rather than as whatever the repository happens to grant.
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # The `browser` Vitest project runs in real Chromium, so this is needed
-      # here and not only in the e2e job.
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - uses: ./.github/actions/setup
 
       - name: Format, lint, typecheck
         run: pnpm check
 
       - name: Test
-        run: pnpm test --run
+        run: pnpm test run --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage
+          path: coverage
+          retention-days: 7
 
       - name: Build
         run: pnpm build
 
+      # The invariants in AGENTS.md that nothing else can see: the in-memory fake
+      # staying out of the entry graph, and `base` still being `/aperture/`.
+      - name: Check the bundle
+        run: pnpm check:bundle
+
+      # Runs here rather than in the e2e job because this is where `dist` already
+      # exists — the alternative is building it twice.
+      - name: Smoke-test the built app
+        run: pnpm e2e:production
+
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: dist
 
@@ -58,33 +62,16 @@ jobs:
     name: e2e
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - uses: ./.github/actions/setup
 
       - name: Run Playwright
         run: pnpm e2e
 
       - name: Upload report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-report
           path: playwright-report
@@ -108,4 +95,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

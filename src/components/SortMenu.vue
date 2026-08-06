@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowDownAZ, ArrowUpAZ, Check, ChevronDown } from "lucide-vue-next";
+import { ArrowDownAZ, ArrowUpAZ, Check, ChevronDown } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import {

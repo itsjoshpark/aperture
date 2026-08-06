@@ -31,6 +31,9 @@ export interface MemoryAdapterOptions {
    * this is how rollback gets tested.
    */
   beforeRename?: (from: string, to: string) => void;
+  /** The same affordance for deletes, which fail for their own reasons: a file
+   *  open in another app, a folder whose permission has lapsed. */
+  beforeDelete?: (name: string) => void;
 }
 
 export class MemoryAdapter implements FileSystemPort {
@@ -38,6 +41,7 @@ export class MemoryAdapter implements FileSystemPort {
   private readonly files = new Map<string, StoredFile>();
   private permission: boolean;
   private readonly beforeRename?: (from: string, to: string) => void;
+  private readonly beforeDelete?: (name: string) => void;
 
   /** Every rename this adapter has performed, oldest first. Test affordance. */
   readonly renameLog: Array<{ from: string; to: string }> = [];
@@ -46,6 +50,7 @@ export class MemoryAdapter implements FileSystemPort {
     this.label = options.label ?? "Photos";
     this.permission = options.permission ?? true;
     this.beforeRename = options.beforeRename;
+    this.beforeDelete = options.beforeDelete;
 
     let clock = 1_700_000_000_000;
     for (const file of files) {
@@ -81,6 +86,7 @@ export class MemoryAdapter implements FileSystemPort {
 
   async delete(name: string): Promise<void> {
     this.assertWritable(name);
+    this.beforeDelete?.(name);
     if (!this.files.has(name)) {
       throw new FileOperationError(`No such file: ${name}`, name);
     }

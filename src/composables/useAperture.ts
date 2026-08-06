@@ -139,6 +139,9 @@ export function createAperture(options: ApertureOptions = {}) {
 
     const names = entries.map((entry) => entry.name);
     busy.value = true;
+    // Cleared up front so the banner always describes this attempt rather than
+    // leaving the previous failure standing over a delete that then worked.
+    gallery.error.value = null;
     try {
       // Shrink the tiles out first, then drop them from the list so the
       // survivors animate into the gap rather than snapping shut around
@@ -151,12 +154,29 @@ export function createAperture(options: ApertureOptions = {}) {
       // Deleting the last image leaves the large view with nothing to show.
       if (displayed.value.length === 0) gallery.view.value = "grid";
     } catch (cause) {
-      gallery.error.value =
-        cause instanceof Error ? cause.message : `Could not delete ${names.join(", ")}.`;
+      gallery.error.value = describeDeleteFailure(cause, names, gallery.entries.value);
     } finally {
       gallery.removingNames.value = new Set();
       busy.value = false;
     }
+  }
+
+  /**
+   * A delete failure has to name files. `removeMany` deletes everything it can
+   * and raises only the first failure, so the grid is left showing some of what
+   * you asked to go and none of why — and the reason alone ("Permission denied")
+   * does not say which. What is still listed is the honest answer.
+   */
+  function describeDeleteFailure(
+    cause: unknown,
+    attempted: string[],
+    remaining: ImageEntry[],
+  ): string {
+    const still = new Set(remaining.map((entry) => entry.name));
+    const kept = attempted.filter((name) => still.has(name));
+    const subject = kept.length > 0 ? kept : attempted;
+    const reason = cause instanceof Error ? cause.message : "the disk refused it";
+    return `Could not delete ${subject.join(", ")} — ${reason}.`;
   }
 
   // ------------------------------------------------------------------- rename

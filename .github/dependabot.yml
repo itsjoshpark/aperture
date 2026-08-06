@@ -1,0 +1,29 @@
+version: 2
+
+updates:
+  # Actions are pinned to commit SHAs, which is what makes this worth automating:
+  # a pinned SHA never moves on its own, so without Dependabot it never moves.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # The toolchain is pinned through a pnpm `catalog:` entry with a
+      # hand-maintained `minimumReleaseAgeExclude` list beside it in
+      # pnpm-workspace.yaml. Dependabot does not know about either, so a bump
+      # here would break the pin and leave the exclusions naming a version
+      # nothing installs. Upgrading Vite+ stays a deliberate, manual step.
+      - dependency-name: vite
+      - dependency-name: vite-plus
+      - dependency-name: "@voidzero-dev/*"
