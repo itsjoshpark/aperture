@@ -271,6 +271,106 @@ test.describe("multiple selection", () => {
   });
 });
 
+/** The page's own globals, described rather than imported: see `ApertureTestHooks`. */
+interface FlipProbe {
+  document: {
+    querySelectorAll: (selector: string) => Iterable<{
+      getAnimations: () => { id: string }[];
+      matches: (selector: string) => boolean;
+    }>;
+  };
+  requestAnimationFrame: (callback: () => void) => void;
+}
+
+/** As `FlipProbe`, for the one card a delete is watched through. */
+interface PathProbe {
+  document: {
+    querySelector: (selector: string) => { getBoundingClientRect: () => { x: number } } | null;
+  };
+  requestAnimationFrame: (callback: () => void) => void;
+}
+
+/**
+ * Where one card sits, every frame, while `act` runs — sampled inside the page
+ * for the same reason the FLIP probe is. Asserting on the animation object
+ * alone would not do here: a FLIP measured across a gap that has not opened yet
+ * computes a zero delta, and still leaves a perfectly real `tile-flip` on the
+ * card having moved it nowhere.
+ */
+async function pathOf(
+  page: Page,
+  name: string,
+  frames: number,
+  act: () => Promise<void>,
+): Promise<number[]> {
+  const watching = page.evaluate(
+    async ([selector, limit]) => {
+      const { document, requestAnimationFrame } = globalThis as unknown as PathProbe;
+      const seen: number[] = [];
+      for (let frame = 0; frame < (limit as number); frame += 1) {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+        const card = document.querySelector(selector as string);
+        if (card) seen.push(Math.round(card.getBoundingClientRect().x));
+      }
+      return seen;
+    },
+    [`[data-name="${name}"] [data-tile-card]`, frames] as const,
+  );
+
+  await act();
+  return watching;
+}
+
+/**
+ * Whether any card ran the grid's FLIP while `act` was happening. Sampled from
+ * inside the page: each animation lasts 260ms, which a round trip per frame
+ * would spend most of and could miss the whole of.
+ */
+async function flipsWhile(page: Page, frames: number, act: () => Promise<void>): Promise<boolean> {
+  const watching = page.evaluate(async (limit) => {
+    const { document, requestAnimationFrame } = globalThis as unknown as FlipProbe;
+    for (let frame = 0; frame < limit; frame += 1) {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+      const running = [...document.querySelectorAll("[data-tile-card]")].some((card) =>
+        card.getAnimations().some((animation) => animation.id === "tile-flip"),
+      );
+      if (running) return true;
+    }
+    return false;
+  }, frames);
+
+  await act();
+  return watching;
+}
+
+/**
+ * Once everything has settled, every card fills its cell exactly — so no
+ * transform was left behind by the FLIP. Polled, since it is measuring the far
+ * end of a 260ms animation, and a card mid-flight is off its cell by design.
+ */
+async function cardsMatchCells(page: Page): Promise<void> {
+  const cells = page.getByRole("gridcell");
+  const cards = page.locator("[data-tile-card]");
+
+  await expect
+    .poll(async () => {
+      // A cell on its way out is `display: none`: still a card, no longer a
+      // gridcell, and no box to measure. Retry rather than pair them up wrong.
+      const count = await cells.count();
+      if (count === 0 || count !== (await cards.count())) return -1;
+
+      let drift = 0;
+      for (let index = 0; index < count; index += 1) {
+        const outer = await cells.nth(index).boundingBox();
+        const inner = await cards.nth(index).boundingBox();
+        if (!outer || !inner) return -1;
+        drift += Math.abs(outer.x - inner.x) + Math.abs(outer.width - inner.width);
+      }
+      return Math.round(drift);
+    })
+    .toBe(0);
+}
+
 test.describe("delete", () => {
   test("warns that deleting is permanent, then deletes", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
@@ -350,6 +450,50 @@ test.describe("delete", () => {
     await expect(selected(page)).toHaveText([/c\.jpg/]);
   });
 
+  /**
+   * The survivors travel into the gap rather than snapping across it: `c.jpg`
+   * is two tracks to the left when this is over, and the frames in between are
+   * the whole point. A grid that jumps reports two positions, an old and a new.
+   */
+  test("slides the survivors into the gap the deleted photos leave", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg", "g.jpg"]);
+
+    await clickTile(page, "a.jpg");
+    await clickTile(page, "b.jpg", ["Shift"]);
+    await page.keyboard.press("Delete");
+
+    const path = await pathOf(page, "c.jpg", 90, () =>
+      page.getByRole("button", { name: "Delete permanently" }).click(),
+    );
+
+    expect(new Set(path).size).toBeGreaterThan(4);
+    expect(path.at(-1)).toBeLessThan(path[0]!);
+    await expect(page.getByRole("gridcell")).toHaveCount(5);
+    await cardsMatchCells(page);
+  });
+
+  /**
+   * Rename mode shows the draft, so a delete reaches the grid through `forget`
+   * instead of through the entries list — a second route to the same animation,
+   * and the one that walks a selection a name at a time.
+   */
+  test("slides them in rename mode too, where it is the draft that shrinks", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+
+    await dragTile(page, "d.jpg", "a.jpg");
+    await expect(page.getByRole("gridcell")).toHaveText([/d\.jpg/, /a\.jpg/, /b\.jpg/, /c\.jpg/]);
+
+    await clickTile(page, "a.jpg");
+    await page.keyboard.press("Delete");
+
+    const path = await pathOf(page, "b.jpg", 90, () =>
+      page.getByRole("button", { name: "Delete permanently" }).click(),
+    );
+
+    expect(new Set(path).size).toBeGreaterThan(4);
+    await expect(page.getByRole("gridcell")).toHaveText([/d\.jpg/, /b\.jpg/, /c\.jpg/]);
+  });
+
   test("says so when the disk refuses a delete", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg"], { failDelete: ["a.jpg"] });
 
@@ -408,17 +552,6 @@ test.describe("delete", () => {
   });
 });
 
-/** The page's own globals, described rather than imported: see `ApertureTestHooks`. */
-interface FlipProbe {
-  document: {
-    querySelectorAll: (selector: string) => Iterable<{
-      getAnimations: () => { id: string }[];
-      matches: (selector: string) => boolean;
-    }>;
-  };
-  requestAnimationFrame: (callback: () => void) => void;
-}
-
 test.describe("preview size", () => {
   const sizeSlider = (page: Page) => page.getByRole("slider", { name: "Preview size" });
 
@@ -451,34 +584,10 @@ test.describe("preview size", () => {
   test("grows the tiles into their new size, and leaves nothing behind", async ({ page }) => {
     await openGallery(page);
 
-    // Sampled from inside the page: an animation lasts 260ms, which a round
-    // trip per frame would spend most of and could miss the whole of.
-    const zoomed = page.evaluate(async () => {
-      const { document, requestAnimationFrame } = globalThis as unknown as FlipProbe;
-      for (let frame = 0; frame < 40; frame += 1) {
-        await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
-        const running = [...document.querySelectorAll("[data-tile-card]")].some((card) =>
-          card.getAnimations().some((animation) => animation.id === "tile-flip"),
-        );
-        if (running) return true;
-      }
-      return false;
-    });
+    const zoomed = await flipsWhile(page, 40, () => sizeSlider(page).press("ArrowRight"));
 
-    await sizeSlider(page).press("ArrowRight");
-    expect(await zoomed).toBe(true);
-
-    // Settled, the card fills its cell exactly: any transform left over from
-    // the FLIP would show up as an offset or a width that does not match.
-    const cell = page.getByRole("gridcell").first();
-    const card = page.locator("[data-tile-card]").first();
-    await expect
-      .poll(async () => {
-        const outer = (await cell.boundingBox())!;
-        const inner = (await card.boundingBox())!;
-        return Math.round(Math.abs(outer.x - inner.x) + Math.abs(outer.width - inner.width));
-      })
-      .toBe(0);
+    expect(zoomed).toBe(true);
+    await cardsMatchCells(page);
   });
 
   /**
