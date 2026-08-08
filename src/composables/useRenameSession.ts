@@ -31,13 +31,6 @@ export function useRenameSession(gallery: Gallery) {
   const failure = ref<string | null>(null);
 
   /**
-   * Set once a rename has landed. The bar stays open in this state and its
-   * primary button becomes Undo, so the way back is exactly where the way
-   * forward was rather than somewhere you have to go looking for it.
-   */
-  const applied = ref(false);
-
-  /**
    * The collision set is the gallery's live name list, not a copy taken when the
    * session opened: the folder keeps changing underneath an open session — you
    * can delete from inside it, and Finder is still there — and a name checked
@@ -58,17 +51,12 @@ export function useRenameSession(gallery: Gallery) {
   );
 
   /**
-   * Whether closing the tab would lose work. Note that having *applied* a rename
-   * is not dirty — the files are already on disk; only an unapplied arrangement
-   * is at risk.
+   * Whether closing the tab would lose work. Only an unapplied arrangement is at
+   * risk: applying closes the session, so there is no state in which the files
+   * are already on disk and a session is still standing over them.
    */
   const dirty = computed(
-    () =>
-      active.value &&
-      !applying.value &&
-      // Once applied, the arrangement is on disk — there is nothing left to lose.
-      !applied.value &&
-      (reordered.value || affixesTouched.value),
+    () => active.value && !applying.value && (reordered.value || affixesTouched.value),
   );
 
   const canUndo = computed(() => undoRecords.value !== null && !applying.value);
@@ -105,7 +93,6 @@ export function useRenameSession(gallery: Gallery) {
   /** Leaves rename mode. The undo record, if any, survives on the toolbar. */
   function cancel(): void {
     active.value = false;
-    applied.value = false;
     draft.value = [];
     initialNames.value = [];
     options.value = { ...DEFAULT_RENAME_OPTIONS };
@@ -117,18 +104,13 @@ export function useRenameSession(gallery: Gallery) {
     const port = gallery.port.value;
     if (!port || !plan.value.valid || plan.value.changes.length === 0) return false;
 
-    // Captured before the run, because the plan is rebuilt from the refreshed
-    // entries the moment their names change underneath it.
-    const targets = plan.value.steps.map((step) => step.to);
-
     const ok = await run(() => executeRename(port, plan.value.changes, { onProgress }));
     if (!ok) return false;
 
-    // Stay open, now showing the files under their new names in the order they
-    // were arranged into — the draft is holding entries that no longer exist.
-    draft.value = orderByName(gallery.entries.value, targets);
-    initialNames.value = targets;
-    applied.value = true;
+    // The arrangement is on disk, so there is nothing left to arrange: the bar
+    // closes, the size slider comes back, and what happened is said in the
+    // message banner. The undo record outlives the session, on the toolbar.
+    cancel();
     return true;
   }
 
@@ -144,15 +126,6 @@ export function useRenameSession(gallery: Gallery) {
     // The folder is back to how it started, so there is nothing left to arrange.
     cancel();
     return true;
-  }
-
-  /** Re-materialise a drag order against freshly listed entries. */
-  function orderByName(entries: ImageEntry[], names: string[]): ImageEntry[] {
-    const byName = new Map(entries.map((entry) => [entry.name, entry]));
-    return names.flatMap((name) => {
-      const entry = byName.get(name);
-      return entry ? [entry] : [];
-    });
   }
 
   function onProgress(next: RenameProgress) {
@@ -181,7 +154,6 @@ export function useRenameSession(gallery: Gallery) {
 
   return {
     active,
-    applied,
     options,
     draft,
     plan,

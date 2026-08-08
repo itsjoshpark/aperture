@@ -93,9 +93,13 @@ folder still costs a click and a prompt, which is not enough better than picking
 keeping handles in IndexedDB. `FileSystemPort.ensurePermission()` exists for adapters that need it,
 but nothing calls it: `showDirectoryPicker()` asks for `readwrite` up front.
 
-**A rename session stays open after applying**, with its button switched to Undo — so the draft holds
-`ImageEntry` objects whose names no longer exist, and `apply()` re-materialises it against the
-refreshed listing. Anything keeping a session alive across a disk change must do the same.
+**Applying a rename ends the session.** The files are on disk and there is nothing left to arrange,
+so the bar closes, the size slider comes back, and what happened is said in `MessageBanner` —
+`gallery.notice`, held apart from `gallery.error` so a failure is never papered over by the next
+success. Applying also sets the sort to name-ascending: the grid goes back to showing the sort
+rather than the draft, and since the rename numbered the files in the arranged order, name order
+_is_ that arrangement. Under any other sort the photos would jump out of the order they were just
+put in. The undo record outlives the session, on the toolbar.
 
 **The folder's name list has exactly one owner.** `gallery.allNames` — every name in the folder,
 images or not — is what rename mode checks targets against, and a session outlives changes to the

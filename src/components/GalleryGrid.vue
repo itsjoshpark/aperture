@@ -128,13 +128,9 @@ watch(drag.dragging, (lifted) => {
   void flipThrough();
 });
 
-/**
- * Old name -> new name, for the per-tile preview. Null once the rename has been
- * applied: at that point the names on the tiles are the real ones, and showing
- * them struck through against themselves would be nonsense.
- */
+/** Old name -> new name, for the per-tile preview of an unapplied rename. */
 const previewNames = computed(() => {
-  if (!rename.active.value || rename.applied.value) return null;
+  if (!rename.active.value) return null;
   return new Map(rename.plan.value.steps.map((step) => [step.from, step.to]));
 });
 
