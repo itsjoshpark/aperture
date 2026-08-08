@@ -805,6 +805,43 @@ test.describe("rename", () => {
     await expect(page.getByRole("button", { name: "Bulk Rename…" })).toBeVisible();
   });
 
+  /**
+   * Renumbering a folder that is already numbered is a permutation: every name
+   * survives the rename with a different photo behind it. The tiles keep their
+   * keys, so Vue reuses them rather than mounting new ones, and anything that
+   * decided it was showing the right file by comparing names goes on drawing the
+   * photo it had — the whole grid redraws itself as it was, which is
+   * indistinguishable from the rename having been cancelled.
+   *
+   * The seeded files are visually identical, so what proves a tile re-read its
+   * file is the object URL it is drawing having changed.
+   */
+  test("re-reads the photos when a rename hands their names to other files", async ({ page }) => {
+    await openGallery(page, ["1.jpg", "2.jpg", "3.jpg"]);
+
+    const sources = async () => {
+      const images = await page.getByRole("gridcell").locator("img").all();
+      return Promise.all(images.map((image) => image.getAttribute("src")));
+    };
+
+    const before = await sources();
+    expect(before).toHaveLength(3);
+
+    await dragTile(page, "3.jpg", "1.jpg");
+
+    // No prefix, so the targets are the three names the folder already holds.
+    await page.getByRole("button", { name: /^Rename \d+ files?$/ }).click();
+    await expect(page.getByText("Renamed.")).toBeVisible();
+
+    await expect(page.getByRole("gridcell")).toHaveText([/^1\.jpg/, /^2\.jpg/, /^3\.jpg/]);
+    await expect
+      .poll(async () => {
+        const after = await sources();
+        return after.length === 3 && after.every((src) => !before.includes(src));
+      })
+      .toBe(true);
+  });
+
   test("reorders from the keyboard as well as the mouse", async ({ page }) => {
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 

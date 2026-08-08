@@ -13,9 +13,9 @@ const url = ref<string | null>(null);
 const loaded = ref(false);
 const failed = ref(false);
 const pending = ref(false);
-/** See `ImageTile` — the name with an outstanding `acquire()`, which a slow
+/** See `ImageTile` — the entry with an outstanding `acquire()`, which a slow
  *  HEIC decode gives plenty of time to go stale. */
-let requested: string | null = null;
+let requested: ImageEntry | null = null;
 
 const noPreview = computed(() => !isPreviewable(props.entry.name) || failed.value);
 const decoding = computed(() => pending.value && !noPreview.value);
@@ -32,28 +32,28 @@ useIntersectionObserver(
 );
 
 async function acquire(): Promise<void> {
-  const name = props.entry.name;
-  if (requested === name) return;
+  const entry = props.entry;
+  if (requested === entry) return;
   release();
 
   // Nothing to show for a format nothing can decode.
-  if (!isPreviewable(name)) return;
+  if (!isPreviewable(entry.name)) return;
 
-  requested = name;
+  requested = entry;
   pending.value = true;
 
   let next: string;
   try {
-    next = await props.cache.acquire(props.entry);
+    next = await props.cache.acquire(entry);
   } catch {
-    if (requested !== name) return;
+    if (requested !== entry) return;
     pending.value = false;
     failed.value = true;
     return;
   }
 
-  if (requested !== name) {
-    props.cache.release(name);
+  if (requested !== entry) {
+    props.cache.release(entry.name);
     return;
   }
   pending.value = false;
@@ -67,12 +67,14 @@ function release(): void {
   pending.value = false;
 
   if (requested === null) return;
-  props.cache.release(requested);
+  props.cache.release(requested.name);
   requested = null;
 }
 
+// On the entry, not the name: see `ImageTile`. A rename can leave a name where
+// it was and put a different photo behind it.
 watch(
-  () => props.entry.name,
+  () => props.entry,
   () => {
     if (requested) acquire();
   },

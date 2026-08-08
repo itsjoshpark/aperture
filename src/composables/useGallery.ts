@@ -124,7 +124,6 @@ export function useGallery() {
     loading.value = true;
     error.value = null;
     try {
-      thumbnails.clear();
       port.value = next;
       await refresh();
       // A folder opens with nothing selected, the way a Finder window does. The
@@ -156,6 +155,12 @@ export function useGallery() {
   async function refresh(): Promise<void> {
     const active = port.value;
     if (!active) return;
+
+    // Names are the thumbnail cache's keys, and a re-listing is the one event
+    // that can leave a name where it was pointing at a different file: renaming
+    // an already-numbered folder keeps every name and moves the photos between
+    // them. Dropped here rather than by each caller, so nothing has to remember.
+    thumbnails.clear();
 
     entries.value = await active.list();
     allNames.value = await active.listAllNames();

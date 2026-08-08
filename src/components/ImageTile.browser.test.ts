@@ -399,3 +399,31 @@ test("swaps to the new file when the entry is renamed", async () => {
     .poll(() => (screen.getByRole("img").element() as HTMLImageElement).naturalWidth)
     .toBe(64);
 });
+
+/**
+ * Renumbering a folder that is already numbered is a permutation: every name in
+ * it survives the rename pointing at a different photo. So the name is no
+ * evidence that the file behind it is the same file, and a tile that compares
+ * names goes on drawing the photo it had — the whole grid redraws itself as it
+ * was, while the disk is correct.
+ */
+test("swaps to the new file when a rename hands the same name to another photo", async () => {
+  const cache = new ThumbnailCache();
+  const screen = mount(entryOver("1.png", await pngOf(64, 64), "image/png"), cache);
+  const image = screen.getByRole("img");
+  await expect.poll(() => (image.element() as HTMLImageElement).naturalHeight).toBe(64);
+
+  // What an applied rename does, in order: the cache is dropped because names
+  // are its keys, then the tile is handed a different file under the name it is
+  // already showing.
+  cache.clear();
+  await screen.rerender({
+    entry: entryOver("1.png", await pngOf(64, 32), "image/png"),
+    cache,
+    selected: false,
+  });
+
+  await expect
+    .poll(() => (screen.getByRole("img").element() as HTMLImageElement).naturalHeight)
+    .toBe(32);
+});

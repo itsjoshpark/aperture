@@ -166,8 +166,6 @@ export function useRenameSession(gallery: Gallery) {
 
     try {
       const records = await operation();
-      // Names are the thumbnail cache's keys and they have all just changed.
-      gallery.thumbnails.clear();
       await gallery.refresh();
       undoRecords.value = records.length > 0 ? records : null;
       return true;

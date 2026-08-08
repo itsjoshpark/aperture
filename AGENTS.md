@@ -155,6 +155,15 @@ evicts the second kind without punishing the first. Pair every `acquire()` with 
 `release()` — including when it rejects, and when you give up before it settles, which is what
 cancels a decode nobody is waiting for.
 
+**A filename does not identify a photograph.** Renumbering a folder that Aperture has already
+numbered is a permutation: every name in it survives the rename with a different photo behind it. A
+surface that decides it is showing the right file by comparing names therefore misses the change
+entirely — and because the grid keys tiles on the name too, Vue reuses the very components that
+would have re-read on mount, so the whole grid redraws itself as it was while the disk is correct.
+Compare the `ImageEntry`, which a listing mints afresh every time: that is why `ImageTile`,
+`FilmstripThumb` and `LargeView` all track the entry they acquired rather than its name, and why
+`refresh()` — not its callers — drops the thumbnail cache.
+
 ### Grid, input, dialogs
 
 **The size slider must not keep focus.** Reka focuses the thumb on pointerdown, as it must to be
