@@ -698,7 +698,7 @@ test.describe("rename", () => {
       /^trip-3\.jpg/,
     ]);
 
-    // The Rename button has become Undo, in place.
+    // The bar has closed and the way back is the toolbar's Undo.
     await expect(page.getByRole("button", { name: /^Rename \d+ files?$/ })).toBeHidden();
     await page.getByRole("button", { name: "Undo rename" }).click();
 
@@ -706,7 +706,9 @@ test.describe("rename", () => {
       .poll(() => diskNames(page).then((names) => names.slice().sort()))
       .toEqual(["a.jpg", "b.jpg", "c.jpg"]);
 
-    // Undoing returns to the ordinary gallery, sorting restored.
+    // Undoing takes its own message, and the offer to undo with it.
+    await expect(page.getByRole("status")).toContainText("Put every original name back.");
+    await expect(page.getByRole("button", { name: "Undo rename" })).toBeHidden();
     await expect(page.getByRole("button", { name: /Name/ })).toBeVisible();
   });
 
@@ -790,19 +792,74 @@ test.describe("rename", () => {
     await page.mouse.up();
   });
 
-  test("keeps the arrangement visible after renaming", async ({ page }) => {
+  /**
+   * A rename that has landed is finished: the files are on disk and there is
+   * nothing left to arrange, so the bar goes rather than lingering with a Done
+   * button on it. What happened is said in the message banner, and the way back
+   * is the toolbar's Undo, where an undo lives whenever no session is open.
+   */
+  test("closes the bar when a rename lands, and says what it did", async ({ page }) => {
+    const sizeSlider = page.getByRole("slider", { name: "Preview size" });
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
     await page.getByRole("button", { name: "Bulk Rename…" }).click();
     await page.getByLabel("Prefix").fill("shot-");
+    await expect(sizeSlider).toBeHidden();
+
     await page.getByRole("button", { name: /^Rename \d+ files?$/ }).click();
 
-    await expect(page.getByText("Renamed.")).toBeVisible();
-
-    // Closing the bar afterwards must not prompt — the work is already on disk.
-    await page.getByRole("button", { name: "Done" }).click();
+    // Nothing to prompt about on the way out — the arrangement is on disk.
     await expect(page.getByRole("alertdialog")).toBeHidden();
+    await expect(page.getByRole("status")).toContainText("Renamed 3 files.");
+
+    // Back to the ordinary gallery: the size slider below, rename and undo above.
+    await expect(sizeSlider).toBeVisible();
     await expect(page.getByRole("button", { name: "Bulk Rename…" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Undo rename" })).toBeVisible();
+
+    // And the arrangement is still what is on screen, now under the name sort.
+    await expect(page.getByRole("gridcell")).toHaveText([
+      /^shot-1\.jpg/,
+      /^shot-2\.jpg/,
+      /^shot-3\.jpg/,
+    ]);
+  });
+
+  /**
+   * Renumbering a folder that is already numbered is a permutation: every name
+   * survives the rename with a different photo behind it. The tiles keep their
+   * keys, so Vue reuses them rather than mounting new ones, and anything that
+   * decided it was showing the right file by comparing names goes on drawing the
+   * photo it had — the whole grid redraws itself as it was, which is
+   * indistinguishable from the rename having been cancelled.
+   *
+   * The seeded files are visually identical, so what proves a tile re-read its
+   * file is the object URL it is drawing having changed.
+   */
+  test("re-reads the photos when a rename hands their names to other files", async ({ page }) => {
+    await openGallery(page, ["1.jpg", "2.jpg", "3.jpg"]);
+
+    const sources = async () => {
+      const images = await page.getByRole("gridcell").locator("img").all();
+      return Promise.all(images.map((image) => image.getAttribute("src")));
+    };
+
+    const before = await sources();
+    expect(before).toHaveLength(3);
+
+    await dragTile(page, "3.jpg", "1.jpg");
+
+    // No prefix, so the targets are the three names the folder already holds.
+    await page.getByRole("button", { name: /^Rename \d+ files?$/ }).click();
+    await expect(page.getByRole("status")).toContainText("Renamed 3 files.");
+
+    await expect(page.getByRole("gridcell")).toHaveText([/^1\.jpg/, /^2\.jpg/, /^3\.jpg/]);
+    await expect
+      .poll(async () => {
+        const after = await sources();
+        return after.length === 3 && after.every((src) => !before.includes(src));
+      })
+      .toBe(true);
   });
 
   test("reorders from the keyboard as well as the mouse", async ({ page }) => {

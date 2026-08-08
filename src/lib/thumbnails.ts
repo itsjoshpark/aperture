@@ -104,8 +104,9 @@ export class ThumbnailCache {
   }
 
   /**
-   * Drop everything. Called after a rename, because names are the cache keys and
-   * they have all just changed — `1.jpg` may now be a completely different photo.
+   * Drop everything. Called on every re-listing, because names are the cache
+   * keys and a rename is free to keep one and put another photo behind it —
+   * `1.jpg` may now be a completely different photograph.
    */
   clear(): void {
     for (const slot of this.slots.values()) this.discard(slot);

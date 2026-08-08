@@ -196,12 +196,26 @@ export function createAperture(options: ApertureOptions = {}) {
     void guard.attempt(() => rename.cancel());
   }
 
+  /**
+   * Applying closes the session, so the grid stops showing the draft and starts
+   * showing the sort again. Sorting by name is what makes that the same picture:
+   * the rename numbered the files in the arranged order, so name order *is* the
+   * arrangement — under any other sort the photos would jump out of the order
+   * that was the whole point of renaming them.
+   */
   async function applyRename(): Promise<void> {
-    await rename.apply();
+    // Read before the run: the plan is rebuilt against the refreshed entries the
+    // moment their names change underneath it.
+    const count = rename.plan.value.changes.length;
+    if (!(await rename.apply())) return;
+
+    gallery.sort.value = { field: "name", direction: "asc" };
+    gallery.notice.value = `Renamed ${count} file${count === 1 ? "" : "s"}.`;
   }
 
   async function undoRename(): Promise<void> {
-    await rename.undo();
+    if (!(await rename.undo())) return;
+    gallery.notice.value = "Put every original name back.";
   }
 
   return {

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useAperture } from "@/composables/useAperture";
-import { AlertTriangle, Check, Info, Undo2 } from "@lucide/vue";
+import { AlertTriangle, Info } from "@lucide/vue";
 import { computed } from "vue";
 
 const aperture = useAperture();
@@ -49,15 +49,7 @@ const canApply = computed(
 <template>
   <div class="border-t bg-card/60 px-4 py-3 backdrop-blur">
     <div class="flex flex-wrap items-end gap-x-4 gap-y-3">
-      <!--
-        Once the rename has landed these describe what already happened, so they
-        go read-only rather than inviting edits that would do nothing.
-      -->
-      <div
-        class="flex flex-wrap items-end gap-4"
-        :inert="rename.applied.value || undefined"
-        :class="rename.applied.value && 'opacity-50'"
-      >
+      <div class="flex flex-wrap items-end gap-4">
         <div class="grid gap-1">
           <Label for="rename-prefix" class="text-xs text-muted-foreground">Prefix</Label>
           <Input
@@ -101,31 +93,15 @@ const canApply = computed(
 
       <div class="ml-auto flex items-center gap-2">
         <Button size="sm" :disabled="rename.applying.value" @click="aperture.exitRename()">
-          {{ rename.applied.value ? "Done" : "Cancel" }}
+          Cancel
         </Button>
 
         <!--
-          One button, two jobs. After a rename lands it becomes Undo in place,
-          so the way back is where the way forward was.
+          Applying closes the bar: what landed is said in the message banner, and
+          the way back is the toolbar's Undo, which is where an undo lives once
+          there is no session standing over it.
         -->
-        <Button
-          v-if="rename.applied.value"
-          size="sm"
-          class="gap-1.5"
-          :disabled="rename.applying.value"
-          @click="aperture.undoRename()"
-        >
-          <Undo2 class="size-4" />
-          {{ rename.applying.value ? "Undoing…" : "Undo rename" }}
-        </Button>
-
-        <Button
-          v-else
-          variant="primary"
-          size="sm"
-          :disabled="!canApply"
-          @click="aperture.applyRename()"
-        >
+        <Button variant="primary" size="sm" :disabled="!canApply" @click="aperture.applyRename()">
           {{
             rename.applying.value
               ? "Renaming…"
@@ -135,20 +111,7 @@ const canApply = computed(
       </div>
     </div>
 
-    <p
-      v-if="rename.applied.value"
-      class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"
-      role="status"
-    >
-      <Check class="size-3.5 shrink-0" />
-      Renamed. Undo puts every original name back.
-    </p>
-
-    <p
-      v-else-if="problem"
-      class="mt-2 flex items-center gap-1.5 text-xs text-destructive"
-      role="alert"
-    >
+    <p v-if="problem" class="mt-2 flex items-center gap-1.5 text-xs text-destructive" role="alert">
       <AlertTriangle class="size-3.5 shrink-0" />
       {{ problem.message }}
     </p>
