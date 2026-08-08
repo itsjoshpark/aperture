@@ -38,7 +38,7 @@
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitest-browser-vue": "^2.1.0",
-    "vue-tsc": "^3.3.8"
+    "vue-tsc": "^3.3.9"
   },
   "devEngines": {
     "packageManager": {
