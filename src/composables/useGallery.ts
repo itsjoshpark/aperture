@@ -76,6 +76,12 @@ export function useGallery() {
   const view = ref<GalleryView>("grid");
   const loading = ref(false);
   const error = ref<string | null>(null);
+  /**
+   * What just happened, when it worked. Held beside `error` rather than sharing
+   * one field with it: a failure must never be overwritten by the next thing
+   * that went right, so the banner can show the error and keep it.
+   */
+  const notice = ref<string | null>(null);
   const leftoverTempNames = ref<string[]>([]);
 
   /**
@@ -124,7 +130,6 @@ export function useGallery() {
     loading.value = true;
     error.value = null;
     try {
-      thumbnails.clear();
       port.value = next;
       await refresh();
       // A folder opens with nothing selected, the way a Finder window does. The
@@ -151,18 +156,27 @@ export function useGallery() {
     clearSelection();
     view.value = "grid";
     leftoverTempNames.value = [];
+    notice.value = null;
   }
 
   async function refresh(): Promise<void> {
     const active = port.value;
     if (!active) return;
 
+    // Names are the thumbnail cache's keys, and a re-listing is the one event
+    // that can leave a name where it was pointing at a different file: renaming
+    // an already-numbered folder keeps every name and moves the photos between
+    // them. Dropped here rather than by each caller, so nothing has to remember.
+    thumbnails.clear();
+
     entries.value = await active.list();
     allNames.value = await active.listAllNames();
     leftoverTempNames.value = findLeftoverTempNames(allNames.value);
-    // A message describes the operation that failed, not the folder. Once a
-    // later one has succeeded it is describing something that is no longer true.
+    // A message describes the operation it came from, not the folder. Once a
+    // later one has run it is describing something that is no longer true —
+    // which is also what clears "Renamed 12 files." when the undo lands.
     error.value = null;
+    notice.value = null;
 
     // Selected files may have been renamed or deleted out from under us. Drop
     // the names that are gone rather than guessing at a replacement: after a
@@ -337,6 +351,7 @@ export function useGallery() {
     view,
     loading,
     error,
+    notice,
     selectedNames,
     /**
      * The cursor, read-only. Named apart from `selectedNames` on purpose: a
@@ -356,6 +371,9 @@ export function useGallery() {
     refresh,
     dismissError: () => {
       error.value = null;
+    },
+    dismissNotice: () => {
+      notice.value = null;
     },
     select,
     clearSelection,

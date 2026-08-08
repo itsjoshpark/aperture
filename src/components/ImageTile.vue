@@ -37,12 +37,13 @@ const pending = ref(false);
 /** The photo's shape, and so also the proof that it has decoded. */
 const ratio = ref<number | null>(null);
 /**
- * The name this tile has an outstanding `acquire()` for. Tracked separately from
- * `url`, because a HEIC takes hundreds of milliseconds to decode and everything
- * that can happen to a tile — scrolling away, being recycled onto another file,
- * a rename — can happen inside that window.
+ * The entry this tile has an outstanding `acquire()` for — the entry itself, not
+ * its name. Tracked separately from `url`, because a HEIC takes hundreds of
+ * milliseconds to decode and everything that can happen to a tile — scrolling
+ * away, being recycled onto another file, a rename — can happen inside that
+ * window.
  */
-let requested: string | null = null;
+let requested: ImageEntry | null = null;
 
 /** True only when this tile's name would actually change. */
 const renaming = computed(() => !!props.previewName && props.previewName !== props.entry.name);
@@ -97,23 +98,23 @@ useIntersectionObserver(
 );
 
 async function acquire(): Promise<void> {
-  const name = props.entry.name;
-  if (requested === name) return;
+  const entry = props.entry;
+  if (requested === entry) return;
   release();
 
   // No point reading bytes nothing can turn into an image.
   if (unsupported.value) return;
 
-  requested = name;
+  requested = entry;
   pending.value = true;
 
   let next: string;
   try {
-    next = await props.cache.acquire(props.entry);
+    next = await props.cache.acquire(entry);
   } catch {
     // Released while we waited — the cache has already been told, and whatever
     // replaced this request owns the tile now.
-    if (requested !== name) return;
+    if (requested !== entry) return;
     pending.value = false;
     failed.value = true;
     return;
@@ -121,8 +122,8 @@ async function acquire(): Promise<void> {
 
   // The tile may have been recycled onto a different file, or scrolled out of
   // view, while we were reading. The ref is ours to hand back either way.
-  if (requested !== name) {
-    props.cache.release(name);
+  if (requested !== entry) {
+    props.cache.release(entry.name);
     return;
   }
   pending.value = false;
@@ -143,13 +144,19 @@ function release(): void {
   ratio.value = null;
 
   if (requested === null) return;
-  props.cache.release(requested);
+  props.cache.release(requested.name);
   requested = null;
 }
 
-// Renaming changes the cache key, so the tile has to re-read under the new name.
+/**
+ * Re-read on a new entry, not on a new name. Renumbering a folder that is
+ * already numbered is a permutation: every name in it survives the rename
+ * pointing at a different photo, so a name that has not changed is no evidence
+ * that the file behind it has not. A listing hands back fresh entries either
+ * way, which is what makes identity the honest signal.
+ */
 watch(
-  () => props.entry.name,
+  () => props.entry,
   () => {
     if (requested) acquire();
   },

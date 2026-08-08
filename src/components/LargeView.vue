@@ -2,6 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { useAperture } from "@/composables/useAperture";
 import { isPreviewable } from "@/lib/file-names";
+import type { ImageEntry } from "@/lib/fs/types";
 import { ChevronLeft, ChevronRight, ImageOff, Trash2, X } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import Filmstrip from "./Filmstrip.vue";
@@ -13,9 +14,9 @@ const url = ref<string | null>(null);
 const loaded = ref(false);
 const failed = ref(false);
 const pending = ref(false);
-/** See `ImageTile` — the name with an outstanding `acquire()`. Arrowing through
+/** See `ImageTile` — the entry with an outstanding `acquire()`. Arrowing through
  *  a folder can move the selection several times inside one HEIC decode. */
-let requested: string | null = null;
+let requested: ImageEntry | null = null;
 
 const entry = computed(() => aperture.selectedEntry.value);
 const position = computed(
@@ -31,6 +32,10 @@ const decoding = computed(() => pending.value && !noPreview.value);
  * cache as the thumbnails so the two never decode the same file twice — which
  * for HEIC is the difference between opening instantly and waiting for libheif
  * all over again.
+ *
+ * Compared by entry rather than by name, for the reason `ImageTile` spells out:
+ * a rename can leave a name exactly where it was with a different photo behind
+ * it.
  */
 watch(
   entry,
@@ -39,27 +44,26 @@ watch(
       release();
       return;
     }
-    const name = next.name;
-    if (requested === name) return;
+    if (requested === next) return;
 
     release();
-    if (!isPreviewable(name)) return;
+    if (!isPreviewable(next.name)) return;
 
-    requested = name;
+    requested = next;
     pending.value = true;
 
     let acquired: string;
     try {
       acquired = await gallery.thumbnails.acquire(next);
     } catch {
-      if (requested !== name) return;
+      if (requested !== next) return;
       pending.value = false;
       failed.value = true;
       return;
     }
 
-    if (requested !== name) {
-      gallery.thumbnails.release(name);
+    if (requested !== next) {
+      gallery.thumbnails.release(next.name);
       return;
     }
     pending.value = false;
@@ -75,7 +79,7 @@ function release(): void {
   pending.value = false;
 
   if (requested === null) return;
-  gallery.thumbnails.release(requested);
+  gallery.thumbnails.release(requested.name);
   requested = null;
 }
 

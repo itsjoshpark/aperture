@@ -58,6 +58,17 @@ async function flipThrough(change?: () => void): Promise<void> {
 // new size, which is the only moment the old one can be measured.
 watch(gallery.tileSize, () => void flipThrough());
 
+// Photos leaving the grid is the one list change nothing else animates: the
+// slider and the drag call `flipThrough` themselves, and a re-sort or an applied
+// rename hands back the same number of tiles. Pre-flush like the size watcher,
+// so this still measures the DOM the old list rendered.
+watch(
+  () => aperture.displayed.value,
+  (after, before) => {
+    if (after.length < before.length) void flipThrough();
+  },
+);
+
 const metrics = (): GridMetrics => {
   const columns = aperture.columns.value;
   const first = grid.value?.firstElementChild as HTMLElement | null;
@@ -117,13 +128,9 @@ watch(drag.dragging, (lifted) => {
   void flipThrough();
 });
 
-/**
- * Old name -> new name, for the per-tile preview. Null once the rename has been
- * applied: at that point the names on the tiles are the real ones, and showing
- * them struck through against themselves would be nonsense.
- */
+/** Old name -> new name, for the per-tile preview of an unapplied rename. */
 const previewNames = computed(() => {
-  if (!rename.active.value || rename.applied.value) return null;
+  if (!rename.active.value) return null;
   return new Map(rename.plan.value.steps.map((step) => [step.from, step.to]));
 });
 
@@ -244,8 +251,8 @@ defineExpose({ scroller, getTileRect });
 /*
  * Vue's TransitionGroup is supposed to FLIP the cells under this class whenever
  * the grid relays. In practice it does not fire — not on a re-sort, not on a
- * resize, not on a drag — which is why `tile-flip.ts` measures and animates the
- * tiles itself.
+ * resize, not on a drag, not on a delete — which is why `tile-flip.ts` measures
+ * and animates the tiles itself.
  */
 .tile-move {
   transition: transform var(--motion-slow) var(--motion-ease);
@@ -265,8 +272,9 @@ defineExpose({ scroller, getTileRect });
 /*
  * Deletion is animated by `ImageTile` shrinking in place *before* the entry
  * leaves the array — so by the time this runs the tile is already invisible and
- * the survivors can take the space. Leaving it out of the flow here instead
- * would fight the grid's auto-placement.
+ * the survivors can take the space, which they do under the FLIP the watcher
+ * above starts. Leaving it out of the flow here instead would fight the grid's
+ * auto-placement.
  */
 .tile-leave-active {
   transition: opacity var(--motion-fast) var(--motion-ease);
