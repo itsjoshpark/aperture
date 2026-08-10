@@ -47,8 +47,12 @@ const largeView = useLargeViewTransition(aperture.motion, () => {
 
     <RenameBar v-if="aperture.rename.active.value" />
 
+    <!--
+      The rename panel stacks above the footer rather than replacing it: zooming
+      out to see the whole folder and back in to check one photo is half of
+      arranging it, and swapping the slider away cost you the session to get back.
+    -->
     <footer
-      v-else
       class="flex shrink-0 items-center justify-end border-t bg-card/60 px-4 py-2 backdrop-blur"
     >
       <SizeSlider />

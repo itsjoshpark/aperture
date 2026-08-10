@@ -47,7 +47,7 @@ const canApply = computed(
 </script>
 
 <template>
-  <div class="border-t bg-card/60 px-4 py-3 backdrop-blur">
+  <div class="shrink-0 border-t bg-card/60 px-4 py-3 backdrop-blur">
     <div class="flex flex-wrap items-end gap-x-4 gap-y-3">
       <div class="flex flex-wrap items-end gap-4">
         <div class="grid gap-1">
@@ -97,9 +97,9 @@ const canApply = computed(
         </Button>
 
         <!--
-          Applying closes the bar: what landed is said in the message banner, and
-          the way back is the toolbar's Undo, which is where an undo lives once
-          there is no session standing over it.
+          Applying closes this panel: what landed is said in the message banner,
+          and the way back is the toolbar's Undo, which is where an undo lives
+          once there is no session standing over it.
         -->
         <Button variant="primary" size="sm" :disabled="!canApply" @click="aperture.applyRename()">
           {{

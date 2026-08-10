@@ -94,7 +94,7 @@ keeping handles in IndexedDB. `FileSystemPort.ensurePermission()` exists for ada
 but nothing calls it: `showDirectoryPicker()` asks for `readwrite` up front.
 
 **Applying a rename ends the session.** The files are on disk and there is nothing left to arrange,
-so the bar closes, the size slider comes back, and what happened is said in `MessageBanner` —
+so the rename panel closes and what happened is said in `MessageBanner` —
 `gallery.notice`, held apart from `gallery.error` so a failure is never papered over by the next
 success. Applying also sets the sort to name-ascending: the grid goes back to showing the sort
 rather than the draft, and since the rename numbered the files in the arranged order, name order
@@ -169,6 +169,13 @@ Compare the `ImageEntry`, which a listing mints afresh every time: that is why `
 `refresh()` — not its callers — drops the thumbnail cache.
 
 ### Grid, input, dialogs
+
+**The bottom of the app is two panels, not one slot.** The footer holding `SizeSlider` renders
+unconditionally and `RenameBar` stacks above it while a session is open — they are siblings in
+`App.vue`'s flex column, not a `v-if`/`v-else` pair. Zooming out to see the whole folder and back in
+to check one photo is half of arranging it, and a swap costs you the session to get the slider back.
+Both roots are `shrink-0`: with two bars competing for the leftover height, a flex column otherwise
+squashes the rename panel at the widths where its affix row wraps.
 
 **The size slider must not keep focus.** Reka focuses the thumb on pointerdown, as it must to be
 draggable; if it still holds focus on pointerup the arrow keys stay aimed at the slider and only the
