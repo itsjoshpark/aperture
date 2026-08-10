@@ -183,3 +183,114 @@ describe("delete confirmation", () => {
     expect(adapter.names()).toEqual(["a.jpg", "c.jpg"]);
   });
 });
+
+describe("renaming one file", () => {
+  async function openWith(
+    names: string[],
+  ): Promise<{ aperture: Aperture; adapter: MemoryAdapter }> {
+    const adapter = new MemoryAdapter(names, { label: "Test Folder" });
+    const source: FolderSource = { open: async () => adapter };
+
+    const scope = effectScope();
+    scopes.push(scope);
+    const aperture = scope.run(() => createAperture({ source, supported: true }))!;
+
+    await aperture.openFolder();
+    return { aperture, adapter };
+  }
+
+  test("opens on the one selected photo", async () => {
+    const { aperture } = await openWith(["a.jpg", "b.jpg"]);
+    aperture.gallery.select("b.jpg");
+
+    aperture.askToRename();
+
+    expect(aperture.renameDialogOpen.value).toBe(true);
+    expect(aperture.pendingRename.value?.name).toBe("b.jpg");
+  });
+
+  test("has nothing to act on with none or several selected", async () => {
+    const { aperture } = await openWith(["a.jpg", "b.jpg"]);
+
+    aperture.askToRename();
+    expect(aperture.renameDialogOpen.value).toBe(false);
+
+    aperture.gallery.select("a.jpg");
+    aperture.gallery.toggle("b.jpg", aperture.displayed.value);
+    expect(aperture.canRename.value).toBe(false);
+
+    aperture.askToRename();
+    expect(aperture.renameDialogOpen.value).toBe(false);
+  });
+
+  // In the large view one photo is all there is on screen, so the cursor is
+  // unambiguous even when the selection behind it is not.
+  test("acts on the cursor in the large view", async () => {
+    const { aperture } = await openWith(["a.jpg", "b.jpg"]);
+    aperture.gallery.select("a.jpg");
+    aperture.gallery.toggle("b.jpg", aperture.displayed.value);
+    aperture.openLargeView();
+
+    aperture.askToRename();
+
+    expect(aperture.pendingRename.value?.name).toBe("b.jpg");
+  });
+
+  test("refuses while a bulk session owns the order", async () => {
+    const { aperture } = await openWith(["a.jpg", "b.jpg"]);
+    aperture.gallery.select("a.jpg");
+    aperture.enterRename();
+
+    expect(aperture.canRename.value).toBe(false);
+    aperture.askToRename();
+    expect(aperture.renameDialogOpen.value).toBe(false);
+  });
+
+  test("renames, and leaves the selection on where the file went", async () => {
+    const { aperture, adapter } = await openWith(["a.jpg", "b.jpg"]);
+    aperture.gallery.select("a.jpg");
+    aperture.askToRename();
+
+    await aperture.confirmRename("harbour");
+
+    expect(adapter.names().sort()).toEqual(["b.jpg", "harbour.jpg"]);
+    expect(aperture.gallery.cursorName.value).toBe("harbour.jpg");
+    expect(aperture.gallery.notice.value).toBe("Renamed a.jpg to harbour.jpg.");
+    expect(aperture.rename.canUndo.value).toBe(true);
+    expect(aperture.renameDialogOpen.value).toBe(false);
+  });
+
+  test("does nothing when the typed name is not one we would write", async () => {
+    const { aperture, adapter } = await openWith(["a.jpg", "b.jpg"]);
+    aperture.gallery.select("a.jpg");
+    aperture.askToRename();
+
+    await aperture.confirmRename("b");
+
+    expect(adapter.names().sort()).toEqual(["a.jpg", "b.jpg"]);
+    expect(aperture.gallery.notice.value).toBe(null);
+  });
+
+  // The rename bar is what shows `rename.failure`, and it is not up outside a
+  // session — so a failure here has to reach the banner or it is not shown at all.
+  test("puts a failure on the banner", async () => {
+    const adapter = new MemoryAdapter(["a.jpg"], {
+      label: "Test Folder",
+      beforeRename: () => {
+        throw new Error("Permission denied");
+      },
+    });
+    const source: FolderSource = { open: async () => adapter };
+    const scope = effectScope();
+    scopes.push(scope);
+    const aperture = scope.run(() => createAperture({ source, supported: true }))!;
+    await aperture.openFolder();
+
+    aperture.gallery.select("a.jpg");
+    aperture.askToRename();
+    await aperture.confirmRename("harbour");
+
+    expect(aperture.gallery.error.value).toContain("Permission denied");
+    expect(adapter.names()).toEqual(["a.jpg"]);
+  });
+});

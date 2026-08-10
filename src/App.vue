@@ -9,6 +9,7 @@ import LandingScreen from "@/components/LandingScreen.vue";
 import LargeView from "@/components/LargeView.vue";
 import RecoveryBanner from "@/components/RecoveryBanner.vue";
 import RenameBar from "@/components/RenameBar.vue";
+import RenameFileDialog from "@/components/RenameFileDialog.vue";
 import SizeSlider from "@/components/SizeSlider.vue";
 import UnsupportedBrowser from "@/components/UnsupportedBrowser.vue";
 import { useAperture } from "@/composables/useAperture";
@@ -63,6 +64,7 @@ const largeView = useLargeViewTransition(aperture.motion, () => {
     </Transition>
 
     <DeleteDialog />
+    <RenameFileDialog />
     <DiscardChangesDialog />
   </div>
 </template>

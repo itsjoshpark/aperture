@@ -936,6 +936,87 @@ test.describe("rename", () => {
   });
 });
 
+test.describe("rename one file", () => {
+  test("renames the selected photo from the keyboard, and undoes it", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
+
+    await clickTile(page, "b.jpg");
+    await page.keyboard.press("Enter");
+
+    // The field opens on the base with the extension held beside it, selected
+    // ready to be replaced — so typing is all it takes.
+    const field = page.getByLabel("New name");
+    await expect(field).toBeFocused();
+    await expect(field).toHaveValue("b");
+
+    await field.fill("harbour at dusk");
+    await page.getByRole("button", { name: "Rename", exact: true }).click();
+
+    await expect
+      .poll(async () => (await diskNames(page)).slice().sort())
+      .toEqual(["a.jpg", "c.jpg", "harbour at dusk.jpg"]);
+    await expect(page.getByRole("status")).toContainText("Renamed b.jpg to harbour at dusk.jpg.");
+    // The selection follows the file rather than being dropped with its old name.
+    await expect(selected(page)).toHaveText([/harbour at dusk\.jpg/]);
+
+    await page.getByRole("button", { name: "Undo rename" }).click();
+    await expect
+      .poll(async () => (await diskNames(page)).slice().sort())
+      .toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+  });
+
+  test("renames from the toolbar, and only with one photo selected", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg"]);
+
+    const button = page.getByRole("button", { name: "Rename…", exact: true });
+    await expect(button).toBeDisabled();
+
+    await clickTile(page, "a.jpg");
+    await clickTile(page, "b.jpg", ["Meta"]);
+    await expect(button).toBeDisabled();
+
+    await clickTile(page, "a.jpg");
+    await expect(button).toBeEnabled();
+    await button.click();
+
+    await page.getByLabel("New name").fill("beach");
+    await page.getByRole("button", { name: "Rename", exact: true }).click();
+
+    await expect
+      .poll(async () => (await diskNames(page)).slice().sort())
+      .toEqual(["b.jpg", "beach.jpg"]);
+  });
+
+  test("refuses a name another file already holds", async ({ page }) => {
+    await openGallery(page, ["a.jpg", "b.jpg"]);
+
+    await clickTile(page, "a.jpg");
+    await page.keyboard.press("Enter");
+    await page.getByLabel("New name").fill("b");
+
+    await expect(page.getByRole("alert")).toContainText("b.jpg is already in this folder");
+    await expect(page.getByRole("button", { name: "Rename", exact: true })).toBeDisabled();
+
+    // Escape leaves the file alone rather than the dialog quietly committing.
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(async () => (await diskNames(page)).slice().sort())
+      .toEqual(["a.jpg", "b.jpg"]);
+  });
+
+  test("puts the actions in the order the toolbar promises", async ({ page }) => {
+    await openGallery(page, ["a.jpg"]);
+
+    await expect(page.locator("header button")).toHaveText([
+      /Open folder/,
+      /Delete/,
+      /Rename…/,
+      /Bulk Rename…/,
+      /Name/,
+    ]);
+  });
+});
+
 test("explains files left behind by an interrupted rename", async ({ page }) => {
   // A run that died between its two passes leaves files under temp names. They
   // cannot be restored automatically, so the app has to at least account for them.

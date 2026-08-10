@@ -107,6 +107,14 @@ folder. Copying it into the session at `begin()` meant deleting a file left the 
 nothing held any more, with no way out but restarting. Any operation that changes folder contents
 must update `allNames`, the way `removeMany()` and `refresh()` do.
 
+**Renaming one file goes through the same engine as renaming a folder.**
+`rename.renameOne()` hands `executeRename` a single step rather than reaching for `port.rename()`,
+so it keeps the temp hop — which one file needs as much as a hundred, because `photo.jpg` →
+`Photo.jpg` is a move onto itself on a case-insensitive volume. It also shares the one undo record,
+so the toolbar's Undo covers whichever rename happened last. It is refused while a bulk session is
+open: the draft holds the entries a rename would invalidate, and `forget()` — the session's only
+repair — is about a file that has gone, not one renamed underneath the arrangement.
+
 ### Dates
 
 **Date-modified is destroyed by the app's own main feature.** `copyThenDelete` rewrites the bytes, so
@@ -224,9 +232,21 @@ means nothing in a text field. And nothing may be awaited before `openFolder()`:
 
 **Dialogs close themselves before your click handler runs.** Reka's `AlertDialogAction` dismisses the
 dialog as part of handling the click, so state cleared in the "dialog closed" path is already gone
-when the confirm handler looks for it, and the confirm silently does nothing. Both dialogs track
-_whether they are open_ separately from _what they are about_ (`deleteDialogOpen` / `pendingDeletes`,
-`guard.open` / `guard.pending`). Do not merge them back.
+when the confirm handler looks for it, and the confirm silently does nothing. Every dialog tracks
+_whether it is open_ separately from _what it is about_ (`deleteDialogOpen` / `pendingDeletes`,
+`renameDialogOpen` / `pendingRename`, `guard.open` / `guard.pending`). Do not merge them back.
+
+**`useKeyboard` has to be told about each dialog by name.** `handlesItsOwnKeys` covers the presses
+that land in a text field, and nothing else — with focus on a dialog's own Cancel button, `Delete`
+would reach the map and open the delete dialog behind the one already up. So `deleteDialogOpen` and
+`renameDialogOpen` are both consulted, and a fourth dialog would have to be added there too.
+
+**`AlertDialogCancel` takes the focus on open, and takes it late.** Reka's `AlertDialogContent`
+focuses the registered cancel element from inside a `nextTick`, which lands after anything the
+dialog's own `openAutoFocus` handler does — so a dialog that wants focus somewhere else cannot
+simply ask for it. That default is right where the dialog asks whether you meant it and wrong where
+the dialog _is_ a text field, which is why `RenameFileDialog` closes with a plain `Button` and
+registers no cancel element at all.
 
 **A tile's `<img>` is the photograph, not the square it sits in.** The square — `aspect-square` on the
 frame — is what lines a row up, and every photo is centred inside it in a box sized from the image's

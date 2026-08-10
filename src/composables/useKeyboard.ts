@@ -19,6 +19,7 @@ export function useKeyboard(aperture: Aperture) {
       // Claimed before the bail-outs, so a modal never leaks the key to Chrome.
       event.preventDefault();
       if (aperture.deleteDialogOpen.value || aperture.guard.open.value) return;
+      if (aperture.renameDialogOpen.value) return;
       if (aperture.rename.applying.value) return;
       // Nothing may be awaited first: `showDirectoryPicker()` needs the user
       // activation this keydown carries, and the path to it is synchronous.
@@ -28,7 +29,10 @@ export function useKeyboard(aperture: Aperture) {
 
     if (!aperture.hasFolder.value) return;
     // Never steal keys from a control that has its own, or from an open dialog.
+    // Each dialog has to be named: `handlesItsOwnKeys` covers the presses that
+    // land in a field, and not the ones aimed at a focused Cancel button.
     if (handlesItsOwnKeys(event.target) || aperture.deleteDialogOpen.value) return;
+    if (aperture.renameDialogOpen.value) return;
     if (aperture.rename.applying.value) return;
 
     const inLargeView = aperture.gallery.view.value === "large";
@@ -74,8 +78,10 @@ export function useKeyboard(aperture: Aperture) {
         else aperture.openLargeView();
         break;
 
+      // Finder's split, and the reason Space keeps the large view to itself:
+      // Enter renames the photo, here and on top of the large view alike.
       case "Enter":
-        if (!inLargeView) aperture.openLargeView();
+        aperture.askToRename();
         break;
 
       case "Delete":

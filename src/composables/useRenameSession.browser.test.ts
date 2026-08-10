@@ -66,3 +66,60 @@ test("flags a colliding file that appears after the session started", async () =
   expect(rename.plan.value.problems[0]?.code).toBe("external-collision");
   expect(rename.plan.value.problems[0]?.names).toEqual(["shot-2.jpg"]);
 });
+
+test("renames one file outside of a session, and leaves an undo behind", async () => {
+  const port = new MemoryAdapter(["a.jpg", "b.jpg"]);
+  const gallery = useGallery();
+  const rename = useRenameSession(gallery);
+  await gallery.open(port);
+
+  expect(await rename.renameOne("a.jpg", "harbour.jpg")).toBe(true);
+
+  expect(port.names().sort()).toEqual(["b.jpg", "harbour.jpg"]);
+  expect(gallery.allNames.value.sort()).toEqual(["b.jpg", "harbour.jpg"]);
+  expect(rename.canUndo.value).toBe(true);
+
+  expect(await rename.undo()).toBe(true);
+  expect(port.names().sort()).toEqual(["a.jpg", "b.jpg"]);
+});
+
+// The temp hop is not ceremony for one file: on a case-insensitive volume this
+// rename is a move onto itself, and the hop is the only thing that separates them.
+test("takes a single rename through a temp name too", async () => {
+  const port = new MemoryAdapter(["photo.jpg"]);
+  const gallery = useGallery();
+  const rename = useRenameSession(gallery);
+  await gallery.open(port);
+
+  await rename.renameOne("photo.jpg", "Photo.jpg");
+
+  expect(port.names()).toEqual(["Photo.jpg"]);
+  expect(port.renameLog).toHaveLength(2);
+  expect(port.renameLog[0]!.to.startsWith(".aperture-tmp-")).toBe(true);
+});
+
+test("reports a failed single rename rather than throwing", async () => {
+  const port = new MemoryAdapter(["a.jpg"], {
+    beforeRename: () => {
+      throw new Error("Permission denied");
+    },
+  });
+  const gallery = useGallery();
+  const rename = useRenameSession(gallery);
+  await gallery.open(port);
+
+  expect(await rename.renameOne("a.jpg", "b.jpg")).toBe(false);
+
+  expect(rename.failure.value).toContain("Permission denied");
+  expect(port.names()).toEqual(["a.jpg"]);
+  expect(rename.canUndo.value).toBe(false);
+});
+
+// The draft holds the entries a rename would invalidate, and `forget()` — the
+// only repair the session has — is about a file that has gone, not a renamed one.
+test("refuses to rename one file while a session owns the order", async () => {
+  const { port, rename } = await openSession(["a.jpg", "b.jpg"]);
+
+  expect(await rename.renameOne("a.jpg", "harbour.jpg")).toBe(false);
+  expect(port.names().sort()).toEqual(["a.jpg", "b.jpg"]);
+});
