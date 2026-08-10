@@ -107,9 +107,9 @@ export function useRenameSession(gallery: Gallery) {
     const ok = await run(() => executeRename(port, plan.value.changes, { onProgress }));
     if (!ok) return false;
 
-    // The arrangement is on disk, so there is nothing left to arrange: the bar
-    // closes, the size slider comes back, and what happened is said in the
-    // message banner. The undo record outlives the session, on the toolbar.
+    // The arrangement is on disk, so there is nothing left to arrange: the panel
+    // closes and what happened is said in the message banner. The undo record
+    // outlives the session, on the toolbar.
     cancel();
     return true;
   }

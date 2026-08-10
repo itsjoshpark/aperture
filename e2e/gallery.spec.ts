@@ -794,17 +794,23 @@ test.describe("rename", () => {
 
   /**
    * A rename that has landed is finished: the files are on disk and there is
-   * nothing left to arrange, so the bar goes rather than lingering with a Done
+   * nothing left to arrange, so the panel goes rather than lingering with a Done
    * button on it. What happened is said in the message banner, and the way back
    * is the toolbar's Undo, where an undo lives whenever no session is open.
    */
-  test("closes the bar when a rename lands, and says what it did", async ({ page }) => {
+  test("closes the panel when a rename lands, and says what it did", async ({ page }) => {
     const sizeSlider = page.getByRole("slider", { name: "Preview size" });
     await openGallery(page, ["a.jpg", "b.jpg", "c.jpg"]);
 
     await page.getByRole("button", { name: "Bulk Rename…" }).click();
     await page.getByLabel("Prefix").fill("shot-");
-    await expect(sizeSlider).toBeHidden();
+
+    // The rename panel stacks above the footer rather than replacing it, so the
+    // zoom controls stay usable while you arrange.
+    await expect(sizeSlider).toBeVisible();
+    const zoom = await sizeSlider.getAttribute("aria-valuenow");
+    await sizeSlider.press("ArrowRight");
+    await expect(sizeSlider).not.toHaveAttribute("aria-valuenow", zoom!);
 
     await page.getByRole("button", { name: /^Rename \d+ files?$/ }).click();
 
@@ -812,7 +818,8 @@ test.describe("rename", () => {
     await expect(page.getByRole("alertdialog")).toBeHidden();
     await expect(page.getByRole("status")).toContainText("Renamed 3 files.");
 
-    // Back to the ordinary gallery: the size slider below, rename and undo above.
+    // Only the rename panel goes: the footer below is where it always was.
+    await expect(page.getByRole("button", { name: /^Rename \d+ files?$/ })).toBeHidden();
     await expect(sizeSlider).toBeVisible();
     await expect(page.getByRole("button", { name: "Bulk Rename…" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Undo rename" })).toBeVisible();
