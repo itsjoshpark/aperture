@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { useAperture } from "@/composables/useAperture";
 import { OPEN_FOLDER_HINT } from "@/lib/platform";
-import { FolderOpen, Pencil, Trash2, Undo2 } from "@lucide/vue";
+import { FolderOpen, Pencil, PencilLine, Trash2, Undo2 } from "@lucide/vue";
 import { computed } from "vue";
 import SortMenu from "./SortMenu.vue";
 
@@ -50,7 +50,17 @@ const count = computed(() => aperture.displayed.value.length);
         Delete
       </Button>
 
-      <SortMenu />
+      <Button
+        v-if="!rename.active.value"
+        size="sm"
+        class="gap-1.5"
+        aria-keyshortcuts="Enter"
+        :disabled="!aperture.canRename.value"
+        @click="aperture.askToRename()"
+      >
+        <PencilLine class="size-4" />
+        Rename…
+      </Button>
 
       <Button
         v-if="!rename.active.value"
@@ -62,6 +72,8 @@ const count = computed(() => aperture.displayed.value.length);
         <Pencil class="size-4" />
         Bulk Rename…
       </Button>
+
+      <SortMenu />
 
       <Button
         v-if="rename.canUndo.value && !rename.active.value"

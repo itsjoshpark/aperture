@@ -3,6 +3,7 @@ import { createFsaFolderSource, type FolderSource } from "@/lib/fs/folder-source
 import { isFileSystemAccessSupported } from "@/lib/fs/fsa-adapter";
 import type { FileSystemPort, ImageEntry } from "@/lib/fs/types";
 import { clamp, type MoveDirection } from "@/lib/grid-geometry";
+import { planSingleRename } from "@/lib/naming";
 import { useGallery } from "./useGallery";
 import { useReducedMotion, wait } from "./useReducedMotion";
 import { useRenameSession } from "./useRenameSession";
@@ -36,6 +37,10 @@ export function createAperture(options: ApertureOptions = {}) {
    */
   const pendingDeletes = shallowRef<ImageEntry[]>([]);
   const deleteDialogOpen = ref(false);
+
+  /** The same split, for the same reason, for the single-file rename dialog. */
+  const pendingRename = shallowRef<ImageEntry | null>(null);
+  const renameDialogOpen = ref(false);
 
   /** Live column count, published by `GalleryGrid` as the container resizes. */
   const columns = ref(1);
@@ -184,6 +189,64 @@ export function createAperture(options: ApertureOptions = {}) {
     return `Could not delete ${subject.join(", ")} — ${reason}.`;
   }
 
+  // -------------------------------------------------------- rename one file
+
+  /**
+   * The photo a single rename would act on.
+   *
+   * In the large view that is the cursor, because one photo is all there is on
+   * screen; in the grid it is a selection of exactly one, since renaming one
+   * file has nothing to say about a selection of ten — that is what the bulk
+   * session beside it is for.
+   */
+  const renameSubject = computed<ImageEntry | null>(() => {
+    if (gallery.view.value === "large") return selectedEntry.value;
+    return selectedEntries.value.length === 1 ? selectedEntries.value[0]! : null;
+  });
+
+  const canRename = computed(
+    () =>
+      renameSubject.value !== null && !rename.active.value && !rename.applying.value && !busy.value,
+  );
+
+  function askToRename(): void {
+    if (!canRename.value) return;
+    pendingRename.value = renameSubject.value;
+    renameDialogOpen.value = true;
+  }
+
+  /**
+   * Renames the file the dialog was opened for. The typed name is re-planned
+   * here rather than trusted from the dialog: `allNames` is live, and the folder
+   * can gain a colliding file while the dialog stands open.
+   */
+  async function confirmRename(base: string): Promise<void> {
+    const entry = pendingRename.value;
+    renameDialogOpen.value = false;
+    pendingRename.value = null;
+    if (!entry) return;
+
+    const plan = planSingleRename(entry, base, gallery.allNames.value);
+    const to = plan.changes[0]?.to;
+    if (!plan.valid || to === undefined) return;
+
+    busy.value = true;
+    try {
+      if (await rename.renameOne(entry.name, to)) {
+        // `refresh()` drops selected names that no longer exist, and after this
+        // rename that is the file itself. Put the selection on where it went.
+        gallery.select(to);
+        gallery.notice.value = `Renamed ${entry.name} to ${to}.`;
+      } else {
+        // The rename bar is the only thing that shows `rename.failure`, and it is
+        // not up outside a session — so a failure here has to reach the banner.
+        gallery.error.value = rename.failure.value ?? `Could not rename ${entry.name}.`;
+      }
+    } finally {
+      busy.value = false;
+    }
+  }
+
   // ------------------------------------------------------------------- rename
 
   function enterRename(): void {
@@ -232,6 +295,9 @@ export function createAperture(options: ApertureOptions = {}) {
     selectedEntries,
     pendingDeletes,
     deleteDialogOpen,
+    pendingRename,
+    renameDialogOpen,
+    canRename,
     busy,
     hasFolder: computed(() => gallery.port.value !== null),
     openFolder,
@@ -244,6 +310,11 @@ export function createAperture(options: ApertureOptions = {}) {
     confirmDelete,
     cancelDelete: () => {
       deleteDialogOpen.value = false;
+    },
+    askToRename,
+    confirmRename,
+    cancelRename: () => {
+      renameDialogOpen.value = false;
     },
     enterRename,
     exitRename,

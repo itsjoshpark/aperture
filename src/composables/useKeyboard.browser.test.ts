@@ -288,3 +288,56 @@ describe("Space and Delete", () => {
     expect(aperture.pendingDeletes.value.map((entry) => entry.name)).toEqual(["b.jpg"]);
   });
 });
+
+describe("Enter renames", () => {
+  test("opens the rename dialog on the one selected photo", async () => {
+    const { aperture, press } = await bind({ folder: ["a.jpg", "b.jpg"] });
+    aperture.gallery.select("b.jpg");
+
+    press("Enter");
+
+    expect(aperture.renameDialogOpen.value).toBe(true);
+    expect(aperture.pendingRename.value?.name).toBe("b.jpg");
+  });
+
+  // Enter used to be a second way into the large view. Space still is, which is
+  // what leaves Enter free for the thing Finder does with it.
+  test("leaves the large view to Space", async () => {
+    const { aperture, press } = await bind({ folder: ["a.jpg", "b.jpg"] });
+    aperture.gallery.select("a.jpg");
+
+    press("Enter");
+    expect(aperture.gallery.view.value).toBe("grid");
+    aperture.cancelRename();
+
+    press(" ");
+    expect(aperture.gallery.view.value).toBe("large");
+  });
+
+  test("does nothing with none or several selected", async () => {
+    const { aperture, press } = await bind({ folder: ["a.jpg", "b.jpg"] });
+
+    press("Enter");
+    expect(aperture.renameDialogOpen.value).toBe(false);
+
+    aperture.gallery.select("a.jpg");
+    aperture.gallery.toggle("b.jpg", aperture.displayed.value);
+    press("Enter");
+
+    expect(aperture.renameDialogOpen.value).toBe(false);
+  });
+
+  // `handlesItsOwnKeys` covers the presses that land in the field, and not the
+  // ones aimed at a focused Cancel button — so the map is told about the dialog.
+  test("keeps its hands off the rest of the map while the dialog is open", async () => {
+    const { aperture, press } = await bind({ folder: ["a.jpg", "b.jpg"] });
+    aperture.gallery.select("a.jpg");
+    aperture.askToRename();
+
+    press("Delete");
+    expect(aperture.deleteDialogOpen.value).toBe(false);
+
+    press("ArrowRight");
+    expect(aperture.gallery.cursorName.value).toBe("a.jpg");
+  });
+});

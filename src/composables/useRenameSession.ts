@@ -114,6 +114,26 @@ export function useRenameSession(gallery: Gallery) {
     return true;
   }
 
+  /**
+   * Renames one file, outside of any session.
+   *
+   * Through `executeRename` like everything else, so a single rename still goes
+   * via a temp name — which is not ceremony: `photo.jpg` -> `Photo.jpg` is a
+   * move onto itself on a case-insensitive volume, and the hop is what stops it
+   * being one. It also lands an undo record, so the toolbar's Undo covers a
+   * single rename and a whole folder with the same button.
+   *
+   * Refused while a session is open. The draft holds the entries a rename would
+   * invalidate, and `forget()` — the only repair — is about a file that has
+   * gone, not one that has been renamed underneath the arrangement.
+   */
+  async function renameOne(from: string, to: string): Promise<boolean> {
+    const port = gallery.port.value;
+    if (!port || active.value || from === to) return false;
+
+    return run(() => executeRename(port, [{ from, to, changed: true }], { onProgress }));
+  }
+
   async function undo(): Promise<boolean> {
     const port = gallery.port.value;
     const records = undoRecords.value;
@@ -168,6 +188,7 @@ export function useRenameSession(gallery: Gallery) {
     forget,
     cancel,
     apply,
+    renameOne,
     undo,
     clearUndo: () => {
       undoRecords.value = null;
