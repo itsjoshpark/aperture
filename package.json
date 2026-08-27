@@ -15,7 +15,7 @@
     "prepare": "vp config"
   },
   "dependencies": {
-    "@lucide/vue": "^1.31.0",
+    "@lucide/vue": "^1.34.0",
     "@vueuse/core": "^14.4.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -29,7 +29,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@vitejs/plugin-vue": "^6.0.8",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "@vue/tsconfig": "^0.9.1",
     "playwright": "^1.62.1",
     "tailwindcss": "^4.3.3",
@@ -38,7 +38,7 @@
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitest-browser-vue": "^2.1.0",
-    "vue-tsc": "^3.3.9"
+    "vue-tsc": "^3.3.11"
   },
   "devEngines": {
     "packageManager": {
